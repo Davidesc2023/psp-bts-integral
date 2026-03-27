@@ -1,0 +1,169 @@
+/**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * BTS - INTEGRAL | DESIGN SYSTEM SYPHER
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Fuente única de verdad para todos los estilos visuales.
+ * NO hardcodear colores en ningún componente.
+ * SIEMPRE usar estas variables CSS.
+ */
+
+:root {
+  /* ━━━ COLORES BASE ━━━ */
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-light: #f3f4f6;
+  
+  /* ━━━ TEXTOS ━━━ */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-tertiary: #9ca3af;
+  --color-text-on-dark: #ffffff;
+  
+  /* ━━━ COLORES DE ACENTO ━━━ */
+  --color-accent-positive: #22c55e;
+  --color-accent-positive-light: #86efac;
+  --color-accent-positive-dark: #16a34a;
+  
+  --color-accent-negative: #ef4444;
+  --color-accent-negative-light: #fca5a5;
+  --color-accent-negative-dark: #dc2626;
+  
+  --color-accent-warning: #f59e0b;
+  --color-accent-warning-light: #fbbf24;
+  --color-accent-warning-dark: #d97706;
+  
+  --color-accent-info: #3b82f6;
+  --color-accent-info-light: #93c5fd;
+  --color-accent-info-dark: #2563eb;
+  
+  /* ━━━ SIDEBAR ━━━ */
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-border: #e5e7eb;
+  --color-sidebar-text: #6b7280;
+  --color-sidebar-text-active: #111827;
+  --color-sidebar-item-hover: #f9fafb;
+  --color-sidebar-item-active: #f3f4f6;
+  
+  /* ━━━ NAVBAR ━━━ */
+  --color-navbar-bg: #ffffff;
+  --color-navbar-border: #e5e7eb;
+  --navbar-height: 56px;
+  
+  /* ━━━ SOMBRAS ━━━ */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.15);
+  --shadow-dropdown: 0 4px 20px rgba(0, 0, 0, 0.12);
+  
+  /* ━━━ BORDES REDONDEADOS ━━━ */
+  --radius-card: 10px;
+  --radius-button: 8px;
+  --radius-input: 6px;
+  --radius-badge: 16px;
+  --radius-modal: 12px;
+  
+  /* ━━━ ESPACIADO ━━━ */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  /* ━━━ TIPOGRAFÍA ━━━ */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* ━━━ LAYOUT ━━━ */
+  --sidebar-width: 220px;
+  --sidebar-width-collapsed: 60px;
+  --content-max-width: 1400px;
+  --content-padding: 24px;
+  
+  /* ━━━ TRANSICIONES ━━━ */
+  --transition-fast: 150ms ease-in-out;
+  --transition-base: 250ms ease-in-out;
+  --transition-slow: 350ms ease-in-out;
+  
+  /* ━━━ Z-INDEX ━━━ */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-navbar: 1030;
+  --z-sidebar: 1040;
+  --z-modal-backdrop: 1050;
+  --z-modal: 1060;
+  --z-tooltip: 1070;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BREAKPOINTS RESPONSIVE
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Mobile < 768px */
+@media (max-width: 767px) {
+  :root {
+    --sidebar-width: 0px;
+    --content-padding: 16px;
+    --navbar-height: 56px;
+  }
+}
+
+/* Tablet 768px - 1024px */
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --sidebar-width-collapsed: 60px;
+    --content-padding: 20px;
+  }
+}
+
+/* Desktop > 1024px */
+@media (min-width: 1025px) {
+  :root {
+    --sidebar-width: 220px;
+    --content-padding: 24px;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CLASES UTILITARIAS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Textos */
+.text-primary { color: var(--color-text-primary); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-tertiary { color: var(--color-text-tertiary); }
+
+/* Fondos */
+.bg-surface { background-color: var(--color-surface); }
+.bg-page { background-color: var(--color-bg); }
+
+/* Bordes */
+.border-default { border: 1px solid var(--color-border); }
+.border-light { border: 1px solid var(--color-border-light); }
+
+/* Sombras */
+.shadow-card { box-shadow: var(--shadow-card); }
+.shadow-card-hover { box-shadow: var(--shadow-card-hover); }
+
+/* Espaciado */
+.p-lg { padding: var(--spacing-lg); }
+.p-md { padding: var(--spacing-md); }
+.p-sm { padding: var(--spacing-sm); }
+
+/* Border radius */
+.rounded-card { border-radius: var(--radius-card); }
+.rounded-button { border-radius: var(--radius-button); }
+.rounded-badge { border-radius: var(--radius-badge); }

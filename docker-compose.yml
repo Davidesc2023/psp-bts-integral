@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  psp-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: psp-web
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - psp-network
+    restart: unless-stopped
+
+networks:
+  psp-network:
+    external: true
