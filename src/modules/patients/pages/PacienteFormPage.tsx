@@ -135,9 +135,7 @@ const PacienteFormPage = () => {
         if (!formData.consentSigned) {
           newErrors.consentSigned = 'Debe marcar el consentimiento informado';
         }
-        if (formData.consentSigned && !formData.consentDocument) {
-          newErrors.consentDocument = 'Debe adjuntar el documento PDF del consentimiento';
-        }
+        // El adjunto PDF es opcional — se puede subir después desde el detalle del paciente
         break;
     }
 

@@ -22,14 +22,14 @@ interface FileUploadProps {
 /**
  * Componente de carga de archivos PDF
  * Soporta drag & drop y click to upload
- * Máximo 5MB
+ * Máximo 120MB
  */
 const FileUpload = ({ value, onChange, error, disabled }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_FILE_SIZE = 120 * 1024 * 1024; // 120MB
 
   const validateFile = (file: File): boolean => {
     setLocalError('');
@@ -42,7 +42,7 @@ const FileUpload = ({ value, onChange, error, disabled }: FileUploadProps) => {
 
     // Validar tamaño
     if (file.size > MAX_FILE_SIZE) {
-      setLocalError('El archivo no debe superar los 5MB');
+      setLocalError('El archivo no debe superar los 120MB');
       return false;
     }
 
