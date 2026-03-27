@@ -91,7 +91,7 @@ export const patientService = {
     let query = supabase
       .from('patients')
       .select(SELECT_WITH_JOINS, { count: 'exact' })
-      .eq('deleted', false)
+      .or('deleted.is.null,deleted.eq.false')
       .range(from, to)
       .order('id', { ascending: false });
 
@@ -133,26 +133,37 @@ export const patientService = {
     return mapRow(data);
   },
 
-  createPatient: async (formData: PatientFormData): Promise<Patient> => {
+  createPatient: async (formData: any): Promise<Patient> => {
+    // Mapeo: código de tipo de documento → ID en Supabase
+    const DOC_TYPE_MAP: Record<string, number> = {
+      CC: 1, TI: 2, RC: 5, CE: 3, PA: 4,
+    };
+    // Mapeo: género del form → genre_id en Supabase
+    const GENRE_MAP: Record<string, number> = {
+      MASCULINO: 1, FEMENINO: 2, NO_BINARIO: 3, OTRO: 3, NO_INFORMA: 3,
+    };
     const row = {
       tenant_id: DEFAULT_TENANT,
-      first_name: formData.nombre,
-      last_name: formData.apellido,
-      document_number: formData.documentoIdentidad ?? formData.documento,
-      birth_date: formData.fechaNacimiento,
-      email: formData.email,
-      phone: formData.telefono,
-      address: formData.direccion,
-      department_id: formData.departamento_id,
-      city_id: formData.ciudad_id,
-      eps_id: formData.eps_id,
-      ips_id: formData.ips_id,
-      consentimiento_firmado: formData.consentimientoFirmado,
+      document_type_id: DOC_TYPE_MAP[formData.documentType] ?? 1,
+      document_number: formData.documentNumber ?? formData.documentoIdentidad ?? formData.documento,
+      first_name: formData.firstName ?? formData.nombre,
+      second_name: formData.secondName ?? null,
+      last_name: formData.lastName ?? formData.apellido,
+      birth_date: formData.birthDate ?? formData.fechaNacimiento,
+      genre_id: GENRE_MAP[formData.gender] ?? 3,
+      email: formData.email || null,
+      phone: formData.phone ?? formData.telefono ?? null,
+      address: formData.address ?? formData.direccion ?? null,
+      department_id: formData.departmentId ?? formData.departamento_id ?? null,
+      city_id: formData.cityId ?? formData.ciudad_id ?? null,
+      eps_id: formData.epsId ?? formData.eps_id ?? null,
+      ips_id: formData.ipsId ?? formData.ips_id ?? null,
+      consentimiento_firmado: formData.consentSigned ?? formData.consentimientoFirmado ?? false,
       country_id: 1,
-      status: 'EN_PROCESO',
-      emergency_contact_name: formData.contactoEmergencia?.nombre,
-      emergency_contact_phone: formData.contactoEmergencia?.telefono,
-      emergency_contact_relationship: formData.contactoEmergencia?.parentesco,
+      status: formData.status ?? 'EN_PROCESO',
+      emergency_contact_name: formData.guardianName ?? formData.contactoEmergencia?.nombre ?? null,
+      emergency_contact_phone: formData.guardianPhone ?? formData.contactoEmergencia?.telefono ?? null,
+      emergency_contact_relationship: formData.guardianRelationship ?? formData.contactoEmergencia?.parentesco ?? null,
     };
 
     const { data, error } = await supabase

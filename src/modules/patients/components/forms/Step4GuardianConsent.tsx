@@ -188,7 +188,7 @@ const Step4GuardianConsent = ({
             />
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               Por favor adjunte el consentimiento informado firmado en formato PDF
-              (máximo 5MB)
+              (máximo 120MB)
             </Typography>
           </Grid>
         )}

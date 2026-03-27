@@ -164,7 +164,7 @@ const FileUpload = ({ value, onChange, error, disabled }: FileUploadProps) => {
               : 'Arrastra un archivo PDF o haz clic para seleccionar'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Máximo 5MB
+            Máximo 120MB
           </Typography>
         </Paper>
       ) : (

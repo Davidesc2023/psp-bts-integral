@@ -14,6 +14,8 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/services/supabaseClient';
 import {
   Dashboard,
   People,
@@ -62,11 +64,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ open: externalOpen }) => {
   const user = authStore((state) => state.user);
   const logout = authStore((state) => state.logout);
 
+  // Conteos dinámicos para badges
+  const { data: patientsCount } = useQuery({
+    queryKey: ['sidebar-patients-count'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .or('deleted.is.null,deleted.eq.false');
+      return count ?? 0;
+    },
+    staleTime: 30000,
+  });
+  const { data: barriersCount } = useQuery({
+    queryKey: ['sidebar-barriers-count'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('barriers')
+        .select('*', { count: 'exact', head: true })
+        .eq('activa', true);
+      return count ?? 0;
+    },
+    staleTime: 30000,
+  });
+
   const navItems: NavItem[] = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-    { text: 'Pacientes', icon: <People />, path: '/patients', badge: 12 },
+    { text: 'Pacientes', icon: <People />, path: '/patients', badge: patientsCount || undefined },
     { text: 'Seguimientos', icon: <Assignment />, path: '/followups' },
-    { text: 'Barreras', icon: <Block />, path: '/barriers', badge: 5 },
+    { text: 'Barreras', icon: <Block />, path: '/barriers', badge: barriersCount || undefined },
     { text: 'Paraclínicos', icon: <Science />, path: '/diagnostics' },
     { text: 'Prescripciones', icon: <Medication />, path: '/prescriptions' },
     { text: 'Aplicaciones', icon: <CalendarMonth />, path: '/applications' },
