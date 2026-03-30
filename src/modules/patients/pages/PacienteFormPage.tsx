@@ -59,8 +59,10 @@ const PacienteFormPage = () => {
     occupation: '',
     epsId: undefined,
     ipsId: undefined,
-    status: 'ACTIVO',
+    regime: '',
+    status: 'EN_PROCESO',
     startDate: new Date().toISOString().split('T')[0],
+    treatmentStartDate: '',
     populationTypeId: undefined,
     guardianName: '',
     guardianRelationship: '',
@@ -96,7 +98,22 @@ const PacienteFormPage = () => {
           newErrors.firstName = 'Primer nombre requerido';
         if (!formData.firstLastName.trim())
           newErrors.firstLastName = 'Primer apellido requerido';
-        if (!formData.birthDate) newErrors.birthDate = 'Fecha de nacimiento requerida';
+        if (!formData.birthDate) {
+          newErrors.birthDate = 'Fecha de nacimiento requerida';
+        } else {
+          // Validación fecha de nacimiento vs tipo de documento
+          const today = new Date();
+          const dob = new Date(formData.birthDate);
+          let age = today.getFullYear() - dob.getFullYear();
+          const m = today.getMonth() - dob.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+          if (formData.documentType === 'CC' && age < 18)
+            newErrors.birthDate = `La Cédula de Ciudadanía requiere ser mayor de 18 años (edad actual: ${age})`;
+          if (formData.documentType === 'TI' && (age < 7 || age > 17))
+            newErrors.birthDate = `La Tarjeta de Identidad es para personas de 7 a 17 años (edad actual: ${age})`;
+          if (formData.documentType === 'RC' && age >= 7)
+            newErrors.birthDate = `El Registro Civil es para menores de 7 años (edad actual: ${age})`;
+        }
         if (!formData.gender) newErrors.gender = 'Género requerido';
         if (!formData.phone.trim()) newErrors.phone = 'Teléfono requerido';
         if (!formData.email.trim()) {
@@ -120,14 +137,12 @@ const PacienteFormPage = () => {
 
       case 2: // Paso 3: Datos Clínicos
         if (!formData.epsId) newErrors.epsId = 'EPS requerida';
+        if (!formData.regime) newErrors.regime = 'Régimen requerido';
         if (!formData.ipsId) newErrors.ipsId = 'IPS requerida';
         if (!formData.status) newErrors.status = 'Estado del paciente requerido';
         if (!formData.startDate) newErrors.startDate = 'Fecha de ingreso requerida';
-        if (formData.status === 'SUSPENDIDO' && !formData.suspensionDate) {
-          newErrors.suspensionDate = 'Fecha de suspensión requerida';
-        }
-        if (formData.status === 'RETIRADO' && !formData.retirementDate) {
-          newErrors.retirementDate = 'Fecha de retiro requerida';
+        if (formData.status === 'ACTIVO' && !formData.treatmentStartDate) {
+          newErrors.treatmentStartDate = 'Fecha de inicio de tratamiento requerida cuando el estado es Activo';
         }
         break;
 
@@ -146,15 +161,13 @@ const PacienteFormPage = () => {
   // Mutación para crear paciente
   const createMutation = useMutation({
     mutationFn: async (data: PatientFormData) => {
-      // Crear FormData para enviar archivo
-      const formDataToSend = new FormData();
-
-      // Agregar datos del paciente (campos en inglés según API backend)
       const patientPayload = {
         documentType: data.documentType,
         documentNumber: data.documentNumber,
         firstName: data.firstName,
         secondName: data.secondName || null,
+        firstLastName: data.firstLastName,
+        secondLastName: data.secondLastName || null,
         lastName: `${data.firstLastName}${data.secondLastName ? ' ' + data.secondLastName : ''}`,
         birthDate: data.birthDate,
         gender: data.gender,
@@ -166,22 +179,36 @@ const PacienteFormPage = () => {
         cityId: data.cityId || null,
         epsId: data.epsId || null,
         ipsId: data.ipsId || null,
+        regime: data.regime || null,
         status: data.status || 'EN_PROCESO',
+        startDate: data.startDate || null,
+        treatmentStartDate: data.treatmentStartDate || null,
         educationLevel: data.educationLevel || null,
         maritalStatus: data.maritalStatus || null,
+        occupation: data.occupation || null,
         stratum: data.stratum || null,
         residenceZone: data.residenceZone || null,
+        consentSigned: data.consentSigned,
+        guardianName: data.guardianName || null,
+        guardianPhone: data.guardianPhone || null,
+        guardianRelationship: data.guardianRelationship || null,
       };
 
-      formDataToSend.append('patient', JSON.stringify(patientPayload));
+      // 1. Crear el registro del paciente
+      const patient = await patientService.createPatient(patientPayload as any);
 
-      // Agregar archivo PDF si existe
+      // 2. Si hay documento de consentimiento, subirlo a Supabase Storage
       if (data.consentDocument) {
-        formDataToSend.append('consentDocument', data.consentDocument);
+        try {
+          const docUrl = await patientService.uploadConsentDocument(patient.id, data.consentDocument);
+          await patientService.saveConsentRecord(patient.id, docUrl);
+        } catch (uploadError) {
+          console.warn('Paciente creado, pero no se pudo subir el documento:', uploadError);
+          toast('⚠️ Paciente registrado. El documento de consentimiento no se pudo subir, inténtelo desde el detalle del paciente.', { icon: '⚠️' });
+        }
       }
 
-      // Por ahora usar el servicio sin FormData (ajustar según API)
-      return patientService.createPatient(patientPayload as any);
+      return patient;
     },
     onSuccess: () => {
       toast.success('✅ Paciente registrado exitosamente');
@@ -190,10 +217,8 @@ const PacienteFormPage = () => {
     },
     onError: (error: any) => {
       console.error('Error al crear paciente:', error);
-      toast.error(
-        '❌ Error al registrar paciente: ' +
-          (error.response?.data?.message || 'Verifique los datos')
-      );
+      const msg = error?.message || error?.details || error?.hint || JSON.stringify(error);
+      toast.error('\u274c Error al registrar paciente: ' + (msg || 'Verifique los datos e intente de nuevo'));
     },
   });
 

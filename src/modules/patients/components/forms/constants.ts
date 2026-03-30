@@ -41,3 +41,19 @@ export const MARITAL_STATUS = [
   { value: 'VIUDO',    label: 'Viudo(a)' },
   { value: 'SEPARADO', label: 'Separado(a)' },
 ];
+
+export const OCCUPATIONS = [
+  { value: 'ESTUDIANTE',          label: 'Estudiante' },
+  { value: 'EMPLEADO_PUBLICO',    label: 'Empleado público' },
+  { value: 'EMPLEADO_PRIVADO',    label: 'Empleado privado' },
+  { value: 'INDEPENDIENTE',       label: 'Independiente / Conta' },
+  { value: 'PENSIONADO',          label: 'Pensionado / Jubilado' },
+  { value: 'DESEMPLEADO',         label: 'Desempleado' },
+  { value: 'AMA_DE_CASA',         label: 'Ama de casa' },
+  { value: 'AGRICULTOR',          label: 'Agricultor' },
+  { value: 'COMERCIANTE',         label: 'Comerciante' },
+  { value: 'PROFESIONAL_SALUD',   label: 'Profesional de la salud' },
+  { value: 'OBRERO',              label: 'Obrero / Operario' },
+  { value: 'OTRO',                label: 'Otro' },
+  { value: 'NO_INFORMA',          label: 'Prefiere no informar' },
+];

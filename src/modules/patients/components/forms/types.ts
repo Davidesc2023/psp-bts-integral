@@ -30,8 +30,10 @@ export interface PatientFormData {
   // Paso 3: Clínico
   epsId?: number;
   ipsId?: number;
+  regime?: string;
   status: string;
   startDate: string;
+  treatmentStartDate?: string;
   suspensionDate?: string;
   retirementDate?: string;
   statusReason?: string;

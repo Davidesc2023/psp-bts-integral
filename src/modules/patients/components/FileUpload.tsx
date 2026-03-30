@@ -22,14 +22,14 @@ interface FileUploadProps {
 /**
  * Componente de carga de archivos PDF
  * Soporta drag & drop y click to upload
- * Máximo 120MB
+ * Máximo 200MB
  */
 const FileUpload = ({ value, onChange, error, disabled }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const MAX_FILE_SIZE = 120 * 1024 * 1024; // 120MB
+  const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
 
   const validateFile = (file: File): boolean => {
     setLocalError('');
@@ -42,7 +42,7 @@ const FileUpload = ({ value, onChange, error, disabled }: FileUploadProps) => {
 
     // Validar tamaño
     if (file.size > MAX_FILE_SIZE) {
-      setLocalError('El archivo no debe superar los 120MB');
+      setLocalError('El archivo no debe superar los 200MB');
       return false;
     }
 
@@ -164,7 +164,7 @@ const FileUpload = ({ value, onChange, error, disabled }: FileUploadProps) => {
               : 'Arrastra un archivo PDF o haz clic para seleccionar'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Máximo 120MB
+            Máximo 200MB
           </Typography>
         </Paper>
       ) : (

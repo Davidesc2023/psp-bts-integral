@@ -1,6 +1,7 @@
 import {
   Grid,
   TextField,
+  MenuItem,
   Typography,
   Box,
   FormControlLabel,
@@ -88,11 +89,11 @@ const Step4GuardianConsent = ({
             error={!!errors.guardianRelationship}
             helperText={errors.guardianRelationship || 'Opcional'}
           >
-            <option value=""></option>
+            <MenuItem value=""><em>No especificado</em></MenuItem>
             {GUARDIAN_RELATIONSHIPS.map((rel) => (
-              <option key={rel.value} value={rel.value}>
+              <MenuItem key={rel.value} value={rel.value}>
                 {rel.label}
-              </option>
+              </MenuItem>
             ))}
           </TextField>
         </Grid>
@@ -188,7 +189,7 @@ const Step4GuardianConsent = ({
             />
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               Por favor adjunte el consentimiento informado firmado en formato PDF
-              (máximo 120MB)
+              (máximo 200MB). El documento se guardará de forma segura.
             </Typography>
           </Grid>
         )}

@@ -4,6 +4,7 @@ import {
   MenuItem,
   Typography,
   Box,
+  Alert,
 } from '@mui/material';
 import { DOCUMENT_TYPES, GENDERS } from './constants';
 import type { PatientFormData } from './types';
@@ -15,11 +16,43 @@ interface Step1BasicDataProps {
 }
 
 /**
+ * Calcula la edad en años a partir de una fecha ISO (YYYY-MM-DD)
+ */
+function calcAge(birthDate: string): number {
+  if (!birthDate) return -1;
+  const today = new Date();
+  const dob = new Date(birthDate);
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+/**
+ * Retorna advertencia si el tipo de documento no corresponde a la edad.
+ * CC: >= 18 años | TI: 7-17 años | RC: < 7 años | MS: < 18 años
+ */
+function docAgeWarning(docType: string, birthDate: string): string | null {
+  if (!birthDate || !docType) return null;
+  const age = calcAge(birthDate);
+  if (age < 0) return null;
+  if (docType === 'CC' && age < 18)
+    return `La Cédula de Ciudadanía es para mayores de 18 años. El paciente tiene ${age} años.`;
+  if (docType === 'TI' && (age < 7 || age > 17))
+    return `La Tarjeta de Identidad es para personas de 7 a 17 años. El paciente tiene ${age} años.`;
+  if (docType === 'RC' && age >= 7)
+    return `El Registro Civil es para menores de 7 años. El paciente tiene ${age} años.`;
+  if (docType === 'MS' && age >= 18)
+    return `El documento "Menor sin identificación" es para menores de 18 años. El paciente tiene ${age} años.`;
+  return null;
+}
+
+/**
  * Paso 1/4: Datos Básicos + Contacto
- * - Identificación, nombres, fecha de nacimiento, género
- * - Teléfono, email, dirección
  */
 const Step1BasicData = ({ formData, updateFormData, errors }: Step1BasicDataProps) => {
+  const ageWarning = docAgeWarning(formData.documentType, formData.birthDate);
+
   return (
     <Box>
       <Typography variant="h6" gutterBottom fontWeight="bold" color="primary">
@@ -120,6 +153,15 @@ const Step1BasicData = ({ formData, updateFormData, errors }: Step1BasicDataProp
             }}
           />
         </Grid>
+
+        {/* Advertencia fecha vs tipo de documento */}
+        {ageWarning && (
+          <Grid item xs={12}>
+            <Alert severity="warning">
+              ⚠️ {ageWarning}
+            </Alert>
+          </Grid>
+        )}
 
         {/* Género */}
         <Grid item xs={12} sm={6} md={4}>

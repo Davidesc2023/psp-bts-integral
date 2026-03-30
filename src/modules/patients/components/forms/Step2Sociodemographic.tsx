@@ -12,6 +12,7 @@ import { catalogService } from '@services/catalog.service';
 import {
   EDUCATION_LEVELS,
   MARITAL_STATUS,
+  OCCUPATIONS,
 } from './constants';
 import type { PatientFormData } from './types';
 
@@ -224,13 +225,20 @@ const Step2Sociodemographic = ({
         {/* Ocupación */}
         <Grid item xs={12} sm={6}>
           <TextField
+            select
             fullWidth
             label="Ocupación"
             value={formData.occupation || ''}
             onChange={(e) => updateFormData({ occupation: e.target.value })}
-            placeholder="Ej: Estudiante, Empleado, Independiente"
             helperText="Opcional"
-          />
+          >
+            <MenuItem value=""><em>No especificado</em></MenuItem>
+            {OCCUPATIONS.map((occ) => (
+              <MenuItem key={occ.value} value={occ.value}>
+                {occ.label}
+              </MenuItem>
+            ))}
+          </TextField>
         </Grid>
       </Grid>
     </Box>

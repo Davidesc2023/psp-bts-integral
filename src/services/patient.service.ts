@@ -148,7 +148,8 @@ export const patientService = {
       document_number: formData.documentNumber ?? formData.documentoIdentidad ?? formData.documento,
       first_name: formData.firstName ?? formData.nombre,
       second_name: formData.secondName ?? null,
-      last_name: formData.lastName ?? formData.apellido,
+      last_name: formData.firstLastName ?? formData.lastName ?? formData.apellido,
+      second_last_name: formData.secondLastName ?? null,
       birth_date: formData.birthDate ?? formData.fechaNacimiento,
       genre_id: GENRE_MAP[formData.gender] ?? 3,
       email: formData.email || null,
@@ -158,9 +159,13 @@ export const patientService = {
       city_id: formData.cityId ?? formData.ciudad_id ?? null,
       eps_id: formData.epsId ?? formData.eps_id ?? null,
       ips_id: formData.ipsId ?? formData.ips_id ?? null,
+      regime: formData.regime ?? null,
+      stratum: formData.stratum ?? null,
+      status: formData.status ?? 'EN_PROCESO',
+      fecha_ingreso: formData.startDate ?? null,
+      fecha_inicio_tratamiento: formData.treatmentStartDate ?? null,
       consentimiento_firmado: formData.consentSigned ?? formData.consentimientoFirmado ?? false,
       country_id: 1,
-      status: formData.status ?? 'EN_PROCESO',
       emergency_contact_name: formData.guardianName ?? formData.contactoEmergencia?.nombre ?? null,
       emergency_contact_phone: formData.guardianPhone ?? formData.contactoEmergencia?.telefono ?? null,
       emergency_contact_relationship: formData.guardianRelationship ?? formData.contactoEmergencia?.parentesco ?? null,
@@ -213,6 +218,49 @@ export const patientService = {
       .from('patients')
       .update({ deleted: true, deleted_at: new Date().toISOString() })
       .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  /**
+   * Sube el documento de consentimiento a Supabase Storage.
+   * Bucket requerido: "documentos-psp" (crearlo en el dashboard de Supabase → Storage).
+   * Retorna la URL pública del archivo.
+   */
+  uploadConsentDocument: async (patientId: number, file: File): Promise<string> => {
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `consentimientos/${patientId}/${Date.now()}_${safeFileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documentos-psp')
+      .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from('documentos-psp')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  },
+
+  /**
+   * Guarda (o actualiza) el registro de consentimiento con la URL del documento.
+   */
+  saveConsentRecord: async (patientId: number, documentUrl: string): Promise<void> => {
+    const { error } = await supabase
+      .from('consentimientos')
+      .upsert(
+        {
+          tenant_id: DEFAULT_TENANT,
+          patient_id: patientId,
+          consentimiento_psp: true,
+          consentimiento_tratamiento: true,
+          archivo_documento: documentUrl,
+          fecha_carga: new Date().toISOString(),
+        },
+        { onConflict: 'patient_id' }
+      );
 
     if (error) throw error;
   },
