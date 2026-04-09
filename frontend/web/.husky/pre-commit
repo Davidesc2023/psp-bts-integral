@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# PSP Pre-commit Hook - Quality Gate
+# Este script corre antes de cada commit para validar calidad
+
+set -e  # Exit on first error
+
+echo "🔍 Running PSP Pre-commit Quality Checks..."
+
+# 1. TypeScript Type-checking
+echo "  → Checking TypeScript types..."
+npm run type-check 2>&1 | head -20
+
+if [ $? -ne 0 ]; then
+    echo "❌ TypeScript type errors found. Fix them before committing."
+    exit 1
+fi
+
+# 2. ESLint validation
+echo "  → Running ESLint..."
+npm run lint 2>&1 | head -20
+
+if [ $? -ne 0 ]; then
+    echo "❌ ESLint errors found. Fix them before committing."
+    exit 1
+fi
+
+# 3. Build test (check if code compiles)
+echo "  → Testing build..."
+npm run build 2>&1 | tail -5
+
+if [ $? -ne 0 ]; then
+    echo "❌ Build failed. Fix compilation errors before committing."
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
+exit 0
