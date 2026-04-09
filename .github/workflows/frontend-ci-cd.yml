@@ -1,0 +1,330 @@
+# ====================================================================
+# GITHUB ACTIONS CI/CD PIPELINE - Frontend
+# ====================================================================
+
+name: Frontend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci-cd.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'frontend/**'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: psp-production-cluster
+  ECR_REGISTRY: 123456789.dkr.ecr.us-east-1.amazonaws.com
+  NODE_VERSION: '20'
+
+jobs:
+  # ==================== BUILD & TEST ====================
+  build-and-test:
+    name: Build and Test Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/web/package-lock.json
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+      
+      - name: Install dependencies
+        working-directory: frontend/web
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: frontend/web
+        run: npm run lint
+      
+      - name: Run type check
+        working-directory: frontend/web
+        run: npx tsc --noEmit
+      
+      - name: Run unit tests
+        working-directory: frontend/web
+        run: npm test -- --coverage --watchAll=false
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: frontend/web/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+      
+      - name: Build application
+        working-directory: frontend/web
+        env:
+          VITE_API_URL: https://api.psp-valentech.com
+        run: npm run build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-dist
+          path: frontend/web/dist/
+          retention-days: 7
+      
+      - name: Analyze bundle size
+        working-directory: frontend/web
+        run: |
+          npm run build -- --mode=production
+          npx vite-bundle-visualizer --template=treemap
+
+  # ==================== SECURITY SCANNING ====================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install dependencies
+        working-directory: frontend/web
+        run: npm ci
+      
+      # NPM Audit
+      - name: Run npm audit
+        working-directory: frontend/web
+        run: npm audit --production --audit-level=moderate
+        continue-on-error: true
+      
+      # Snyk security scan
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=frontend/web/package.json
+        continue-on-error: true
+      
+      # Secret scanning
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./frontend/
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+      
+      # SAST scanning
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          projectBaseDir: frontend/web
+          args: >
+            -Dsonar.projectKey=psp-frontend
+            -Dsonar.sources=src
+            -Dsonar.tests=src
+            -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+
+  # ==================== E2E TESTING ====================
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install dependencies
+        working-directory: frontend/web
+        run: npm ci
+      
+      - name: Install Playwright
+        working-directory: frontend/web
+        run: npx playwright install --with-deps
+      
+      - name: Run E2E tests
+        working-directory: frontend/web
+        run: npx playwright test
+        env:
+          CI: true
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: frontend/web/playwright-report/
+          retention-days: 7
+
+  # ==================== DOCKER BUILD & PUSH ====================
+  docker-build-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/psp-frontend
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend/web
+          file: frontend/web/Dockerfile.production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=https://api.psp-valentech.com
+      
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/psp-frontend:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+  # ==================== DEPLOY ====================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging-app.psp-valentech.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl set image deployment/psp-frontend \
+            frontend=${{ env.ECR_REGISTRY }}/psp-frontend:${{ github.sha }} \
+            -n psp-staging
+          
+          kubectl rollout status deployment/psp-frontend -n psp-staging --timeout=5m
+      
+      - name: Smoke tests
+        run: |
+          sleep 20
+          curl -f https://staging-app.psp-valentech.com/health || exit 1
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://app.psp-valentech.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy to production
+        run: |
+          kubectl set image deployment/psp-frontend \
+            frontend=${{ env.ECR_REGISTRY }}/psp-frontend:${{ github.sha }} \
+            -n psp-production
+          
+          kubectl rollout status deployment/psp-frontend -n psp-production --timeout=10m
+      
+      - name: Production smoke tests
+        run: |
+          sleep 30
+          curl -f https://app.psp-valentech.com/health || exit 1
+      
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          kubectl rollout undo deployment/psp-frontend -n psp-production
+      
+      - name: Notify deployment
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: Frontend deployment ${{ job.status }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

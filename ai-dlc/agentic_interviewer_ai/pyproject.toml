@@ -1,0 +1,9 @@
+[tool.uv.workspace]
+members = [
+    "packages/entrevista-shared",
+    "services/entrevista-compliance",
+    # Los siguientes services se agregarán a medida que se generen:
+    # "services/campaign-lambda",
+    # "services/evaluation-lambda",
+    # "services/conversation-lambda",
+]

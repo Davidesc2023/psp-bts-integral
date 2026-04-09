@@ -1,0 +1,415 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  entrevista-compliance
+  Compliance Lambda — Audit Log, Consent, NPS y Retención de Datos para EntreVista AI.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Architectures:
+      - arm64
+    Runtime: python3.12
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        LOG_LEVEL: !Ref LogLevel
+        MONGODB_SECRET_ARN: !Ref MongoDBSecretArn
+        KMS_KEY_ID: !GetAtt ComplianceKMSKey.Arn
+        SNS_TOPIC_ARN: !Ref ComplianceAlertsTopic
+        DLQ_URL: !Ref ComplianceDLQ
+    Layers:
+      - !Ref DependenciesLayer
+    Tracing: Active  # AWS X-Ray
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Default: dev
+
+  LogLevel:
+    Type: String
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+    Default: INFO
+
+  MongoDBSecretArn:
+    Type: String
+    Description: ARN del secreto en Secrets Manager con la URI de MongoDB Atlas
+
+  MongoDBDatabase:
+    Type: String
+    Default: entrevista_compliance
+
+Resources:
+
+  # ─────────────────────────────────────────
+  # KMS Customer Managed Key
+  # ─────────────────────────────────────────
+  ComplianceKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK para entrevista-compliance — cifrado en reposo
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowAccountRoot
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowComplianceLambda
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt ComplianceLambdaRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: "*"
+
+  ComplianceKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/entrevista-compliance-atlas-${Environment}"
+      TargetKeyId: !Ref ComplianceKMSKey
+
+  # ─────────────────────────────────────────
+  # SQS Dead Letter Queue
+  # ─────────────────────────────────────────
+  ComplianceDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "entrevista-compliance-dlq-${Environment}"
+      MessageRetentionPeriod: 1209600  # 14 días
+      KmsMasterKeyId: !Ref ComplianceKMSKey
+      Tags:
+        - Key: Service
+          Value: entrevista-compliance
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ─────────────────────────────────────────
+  # SNS Alert Topic
+  # ─────────────────────────────────────────
+  ComplianceAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "entrevista-compliance-alerts-${Environment}"
+      KmsMasterKeyId: !Ref ComplianceKMSKey
+      Tags:
+        - Key: Service
+          Value: entrevista-compliance
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ─────────────────────────────────────────
+  # IAM Role — Compliance Lambda
+  # ─────────────────────────────────────────
+  ComplianceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "entrevista-compliance-lambda-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: CompliancePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: SecretsManager
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref MongoDBSecretArn
+              - Sid: KMS
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt ComplianceKMSKey.Arn
+              - Sid: SNSPublish
+                Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ComplianceAlertsTopic
+              - Sid: SQSReceive
+                Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ComplianceDLQ.Arn
+              - Sid: CloudWatchMetrics
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+
+  # ─────────────────────────────────────────
+  # Lambda — Compliance HTTP + EventBridge
+  # ─────────────────────────────────────────
+  ComplianceLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "entrevista-compliance-${Environment}"
+      CodeUri: .
+      Handler: app.main.handler
+      Role: !GetAtt ComplianceLambdaRole.Arn
+      ReservedConcurrentExecutions: 300
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ComplianceDLQ.Arn
+      Environment:
+        Variables:
+          MONGODB_DATABASE: !Ref MongoDBDatabase
+      Events:
+        ApiGatewayEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ComplianceHttpApi
+            Path: /{proxy+}
+            Method: ANY
+        ConsentRecorded:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: entrevista-events
+            Pattern:
+              source:
+                - entrevista.conversation
+              detail-type:
+                - compliance.consent.recorded
+        AuditEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: entrevista-events
+            Pattern:
+              source:
+                - entrevista.conversation
+              detail-type:
+                - compliance.audit.event
+        EscalationRaised:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: entrevista-events
+            Pattern:
+              source:
+                - entrevista.conversation
+              detail-type:
+                - compliance.escalation.raised
+        SessionEnded:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: entrevista-events
+            Pattern:
+              source:
+                - entrevista.conversation
+              detail-type:
+                - compliance.session.ended
+
+  # ─────────────────────────────────────────
+  # Lambda — DLQ Processor
+  # ─────────────────────────────────────────
+  DLQProcessorLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "entrevista-compliance-dlq-processor-${Environment}"
+      CodeUri: .
+      Handler: dlq_processor.handler.handler
+      Role: !GetAtt ComplianceLambdaRole.Arn
+      ReservedConcurrentExecutions: 5
+      Events:
+        DLQTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ComplianceDLQ.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  # ─────────────────────────────────────────
+  # EventBridge Scheduler — Purga diaria
+  # ─────────────────────────────────────────
+  RetentionPurgeScheduler:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "entrevista-compliance-retention-purge-${Environment}"
+      ScheduleExpression: "cron(0 2 * * ? *)"  # 02:00 UTC diario
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt ComplianceLambda.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"source": "aws.scheduler", "detail-type": "ScheduledEvent", "detail": {"action": "retention_purge"}}'
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeComplianceLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt ComplianceLambda.Arn
+
+  # ─────────────────────────────────────────
+  # API Gateway HTTP v2
+  # ─────────────────────────────────────────
+  ComplianceHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  # ─────────────────────────────────────────
+  # Lambda Layer — Dependencias Python
+  # ─────────────────────────────────────────
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub "entrevista-compliance-deps-${Environment}"
+      Description: Dependencias Python para entrevista-compliance
+      ContentUri: .layer/
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+    Metadata:
+      BuildMethod: python3.12
+
+  # ─────────────────────────────────────────
+  # CloudWatch — Log Groups
+  # ─────────────────────────────────────────
+  ComplianceLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/entrevista-compliance-${Environment}"
+      RetentionInDays: 90
+
+  DLQProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/entrevista-compliance-dlq-processor-${Environment}"
+      RetentionInDays: 90
+
+  # ─────────────────────────────────────────
+  # CloudWatch Alarms
+  # ─────────────────────────────────────────
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "entrevista-compliance-high-error-rate-${Environment}"
+      AlarmDescription: "Tasa de errores Lambda > 5% en 5 minutos"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ComplianceLambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ComplianceAlertsTopic
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "entrevista-compliance-high-latency-${Environment}"
+      AlarmDescription: "P99 latencia > 1500ms en 5 minutos"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ComplianceLambda
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1500
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ComplianceAlertsTopic
+
+  DLQMessageCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "entrevista-compliance-dlq-messages-${Environment}"
+      AlarmDescription: "Mensajes acumulados en DLQ > 0"
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ComplianceDLQ.QueueName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ComplianceAlertsTopic
+
+Outputs:
+  ComplianceLambdaArn:
+    Description: ARN de la Compliance Lambda
+    Value: !GetAtt ComplianceLambda.Arn
+    Export:
+      Name: !Sub "entrevista-compliance-lambda-arn-${Environment}"
+
+  ComplianceApiUrl:
+    Description: URL de la API HTTP de Compliance
+    Value: !Sub "https://${ComplianceHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Export:
+      Name: !Sub "entrevista-compliance-api-url-${Environment}"
+
+  ComplianceAlertsTopicArn:
+    Description: ARN del SNS Topic de alertas
+    Value: !Ref ComplianceAlertsTopic
+    Export:
+      Name: !Sub "entrevista-compliance-alerts-topic-arn-${Environment}"
+
+  ComplianceDLQUrl:
+    Description: URL de la Dead Letter Queue
+    Value: !Ref ComplianceDLQ
+    Export:
+      Name: !Sub "entrevista-compliance-dlq-url-${Environment}"
+
+  ComplianceKMSKeyArn:
+    Description: ARN de la KMS CMK
+    Value: !GetAtt ComplianceKMSKey.Arn
+    Export:
+      Name: !Sub "entrevista-compliance-kms-key-arn-${Environment}"
