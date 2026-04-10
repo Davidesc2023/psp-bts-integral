@@ -265,6 +265,9 @@ const PacienteFormPage = () => {
         if (!formData.epsId) newErrors.epsId = 'EPS requerida';
         if (!formData.status) newErrors.status = 'Estado del paciente requerido';
         if (!formData.startDate) newErrors.startDate = 'Fecha de ingreso al PSP requerida';
+        if (formData.status === 'ACTIVO' && !formData.fechaActivacion) {
+          newErrors.fechaActivacion = 'Fecha de activación requerida cuando el estado es Activo';
+        }
         if (formData.status === 'ACTIVO' && !formData.treatmentStartDate) {
           newErrors.treatmentStartDate = 'Fecha de inicio de tratamiento requerida cuando el estado es Activo';
         }
@@ -342,6 +345,14 @@ const PacienteFormPage = () => {
     },
   });
 
+  const sanitizeDates = (data: PatientFormData): PatientFormData => ({
+    ...data,
+    startDate: data.startDate || (null as any),
+    fechaActivacion: data.fechaActivacion || (null as any),
+    treatmentStartDate: data.treatmentStartDate || (null as any),
+    fechaRetiro: data.fechaRetiro || (null as any),
+  });
+
   const handleNext = () => {
     if (validateStep(activeStep)) {
       setActiveStep((prev) => prev + 1);
@@ -356,10 +367,11 @@ const PacienteFormPage = () => {
 
   const handleSubmit = () => {
     if (validateStep(activeStep)) {
+      const sanitized = sanitizeDates(formData);
       if (isEditMode) {
-        updateMutation.mutate(formData);
+        updateMutation.mutate(sanitized);
       } else {
-        createMutation.mutate(formData);
+        createMutation.mutate(sanitized);
       }
     } else {
       toast.error('Por favor complete todos los campos requeridos');

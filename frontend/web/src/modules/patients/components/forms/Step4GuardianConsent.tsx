@@ -243,7 +243,19 @@ const Step4GuardianConsent = ({ formData, updateFormData, errors }: Step4Guardia
             fullWidth
             label="Estado en el Programa *"
             value={formData.status || 'EN_PROCESO'}
-            onChange={(e) => updateFormData({ status: e.target.value, treatmentStartDate: e.target.value !== 'ACTIVO' ? formData.treatmentStartDate : formData.treatmentStartDate })}
+            onChange={(e) => {
+              const newStatus = e.target.value;
+              const updates: Partial<PatientFormData> = { status: newStatus };
+              if (newStatus !== 'ACTIVO') {
+                updates.treatmentStartDate = '';
+              }
+              if (newStatus !== 'DROP_OUT' && newStatus !== 'RETIRADO') {
+                updates.fechaRetiro = '';
+                updates.motivoRetiro = '';
+                updates.cambioTratamientoDestino = '';
+              }
+              updateFormData(updates);
+            }}
             error={!!errors.status}
             helperText={errors.status}
           >
@@ -270,9 +282,11 @@ const Step4GuardianConsent = ({ formData, updateFormData, errors }: Step4Guardia
           <TextField
             fullWidth
             type="date"
-            label="Fecha de Activación"
+            label={`Fecha de Activación${isActivo ? ' *' : ''}`}
             value={formData.fechaActivacion || ''}
             onChange={(e) => updateFormData({ fechaActivacion: e.target.value })}
+            error={!!errors.fechaActivacion}
+            helperText={errors.fechaActivacion}
             InputLabelProps={{ shrink: true }}
           />
         </Grid>
