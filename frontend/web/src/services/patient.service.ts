@@ -49,6 +49,19 @@ function buildAnonymizationPatch(docNumber: string | null | undefined): Record<s
 }
 
 
+/**
+ * Converts every empty-string value in a flat payload to null.
+ * Prevents "invalid input syntax for type date: \"\"" errors in Supabase
+ * regardless of how the form initialised its fields.
+ */
+function sanitizePayload<T extends Record<string, unknown>>(payload: T): T {
+  const result = {} as T;
+  for (const key in payload) {
+    result[key] = payload[key] === '' ? null : payload[key];
+  }
+  return result;
+}
+
 /** Mapea un row de Supabase al tipo Patient del frontend */
 function mapRow(r: any): Patient {
   return {
@@ -327,7 +340,7 @@ export const patientService = {
 
     const { data, error } = await supabase
       .from('patients')
-      .insert(row)
+      .insert(sanitizePayload(row))
       .select(SELECT_WITH_JOINS)
       .single();
 
@@ -428,7 +441,7 @@ export const patientService = {
 
     const { data, error } = await supabase
       .from('patients')
-      .update(row)
+      .update(sanitizePayload(row))
       .eq('id', id)
       .select(SELECT_WITH_JOINS)
       .single();
