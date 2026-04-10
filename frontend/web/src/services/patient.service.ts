@@ -165,10 +165,10 @@ const SELECT_WITH_JOINS = `
   *,
   document_types:document_types!patients_document_type_id_fkey(code, name),
   guardian_document_types:document_types!patients_guardian_document_type_id_fkey(code, name),
-  genres(code, name),
-  cities(name),
-  departments(name),
-  eps(name),
+  genres:genres!patients_genre_id_fkey(code, name),
+  cities:cities!patients_city_id_fkey(name),
+  departments:departments!patients_department_id_fkey(name),
+  eps:eps!patients_eps_id_fkey(name),
   ips:ips!patients_ips_id_fkey(name),
   ips_tratante_principal:ips!patients_ips_tratante_principal_id_fkey(name)
 `;
