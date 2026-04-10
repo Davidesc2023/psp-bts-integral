@@ -169,7 +169,8 @@ const SELECT_WITH_JOINS = `
   cities(name),
   departments(name),
   eps(name),
-  ips(name)
+  ips:ips!patients_ips_id_fkey(name),
+  ips_tratante_principal:ips!patients_ips_tratante_principal_id_fkey(name)
 `;
 
 export interface PatientFilters {
