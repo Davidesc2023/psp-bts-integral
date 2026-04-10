@@ -19,6 +19,8 @@ export async function getCurrentTenantId(): Promise<string> {
     data: { user },
   } = await supabase.auth.getUser();
 
+  console.log('[DIAG] USER AUTH:', user);
+
   if (!user) throw new Error('No hay sesión activa');
 
   const { data: profile, error } = await supabase
@@ -26,6 +28,10 @@ export async function getCurrentTenantId(): Promise<string> {
     .select('tenant_id')
     .eq('id', user.id)
     .single();
+
+  console.log('[DIAG] PROFILE DB:', profile);
+  console.log('[DIAG] PROFILE ERROR:', error);
+  console.log('[DIAG] user.id usado en query:', user.id);
 
   if (error || !profile?.tenant_id) {
     throw new Error('El usuario no tiene un tenant asignado. Contacta al administrador.');

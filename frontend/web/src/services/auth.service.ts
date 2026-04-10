@@ -19,11 +19,14 @@ export const authService = {
     if (error) throw new Error(error.message);
 
     // Obtener perfil extendido desde user_profiles
-    const { data: profile } = await supabase
+    console.log('[DIAG] LOGIN - USER AUTH:', data.user);
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('id', data.user.id)
       .single();
+    console.log('[DIAG] LOGIN - PROFILE DB:', profile);
+    console.log('[DIAG] LOGIN - PROFILE ERROR:', profileError);
 
     const user: User = {
       id: data.user.id,
@@ -67,13 +70,16 @@ export const authService = {
    */
   getCurrentUser: async (): Promise<User | null> => {
     const { data: { user } } = await supabase.auth.getUser();
+    console.log('[DIAG] getCurrentUser - USER AUTH:', user);
     if (!user) return null;
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('id', user.id)
       .single();
+    console.log('[DIAG] getCurrentUser - PROFILE DB:', profile);
+    console.log('[DIAG] getCurrentUser - PROFILE ERROR:', profileError);
 
     return {
       id: user.id,
