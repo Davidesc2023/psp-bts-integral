@@ -163,7 +163,8 @@ function mapRow(r: any): Patient {
 
 const SELECT_WITH_JOINS = `
   *,
-  document_types(code, name),
+  document_types:document_types!patients_document_type_id_fkey(code, name),
+  guardian_document_types:document_types!patients_guardian_document_type_id_fkey(code, name),
   genres(code, name),
   cities(name),
   departments(name),
