@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -24,6 +24,7 @@ import {
   FormControlLabel,
   Checkbox,
   DialogActions,
+  TablePagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -50,6 +51,9 @@ export const EntregasPage = () => {
   const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
   const [formData, setFormData] = useState<Partial<CreateEntregaRequest>>({});
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalElements, setTotalElements] = useState(0);
   const [transitoData, setTransitoData] = useState({ numeroGuia: '' });
   const [entregadaData, setEntregadaData] = useState({
     nombreReceptor: '',
@@ -69,19 +73,20 @@ export const EntregasPage = () => {
   useEffect(() => {
     loadEntregas();
     loadMedicamentosPorVencer();
-  }, []);
+  }, [page, pageSize]);
 
-  const loadEntregas = async () => {
+  const loadEntregas = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await entregaService.getAll(0, 50);
+      const data = await entregaService.getAll(page, pageSize);
       setEntregas(data.content || []);
+      setTotalElements(data.totalElements ?? 0);
     } catch (error) {
       console.error('Error cargando entregas:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize]);
 
   const loadMedicamentosPorVencer = async () => {
     try {
@@ -279,6 +284,7 @@ export const EntregasPage = () => {
       {loading ? (
         <Typography>Cargando...</Typography>
       ) : (
+        <>
         <Grid container spacing={2}>
           {entregas.map((entrega) => (
             <Grid item xs={12} md={6} lg={4} key={entrega.id}>
@@ -427,6 +433,18 @@ export const EntregasPage = () => {
             </Grid>
           ))}
         </Grid>
+        <TablePagination
+          component="div"
+          count={totalElements}
+          page={page}
+          rowsPerPage={pageSize}
+          rowsPerPageOptions={[10, 20, 50]}
+          onPageChange={(_, p) => setPage(p)}
+          onRowsPerPageChange={(e) => { setPageSize(parseInt(e.target.value, 10)); setPage(0); }}
+          labelRowsPerPage="Filas:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+        />
+        </>
       )}
 
       {/* Dialog Crear */}

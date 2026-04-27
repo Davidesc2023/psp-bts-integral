@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -17,6 +17,7 @@ import {
   FormControl,
   InputLabel,
   DialogActions,
+  TablePagination,
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Visibility as ViewIcon, AttachFile as AttachFileIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { prescripcionService, medicamentoService, medicoService } from '@services/prescripcionService';
@@ -32,6 +33,9 @@ export const PrescripcionesPage = () => {
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedPrescripcion, setSelectedPrescripcion] = useState<Prescripcion | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalElements, setTotalElements] = useState(0);
   const [formData, setFormData] = useState<Partial<CreatePrescripcionRequest>>(
     { pacienteId: undefined } // paciente se selecciona con PatientSelector
   );
@@ -41,19 +45,20 @@ export const PrescripcionesPage = () => {
     loadPrescripciones();
     loadMedicamentos();
     loadMedicos();
-  }, []);
+  }, [page, pageSize]);
 
-  const loadPrescripciones = async () => {
+  const loadPrescripciones = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await prescripcionService.getAll(0, 50);
+      const data = await prescripcionService.getAll(page, pageSize);
       setPrescripciones(data.content || []);
+      setTotalElements(data.totalElements ?? 0);
     } catch (error) {
       console.error('Error cargando prescripciones:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize]);
 
   const loadMedicamentos = async () => {
     try {
@@ -162,6 +167,7 @@ export const PrescripcionesPage = () => {
       {loading ? (
         <Typography>Cargando...</Typography>
       ) : (
+        <>
         <Grid container spacing={2}>
           {prescripciones.map((prescripcion) => (
             <Grid item xs={12} md={6} lg={4} key={prescripcion.id}>
@@ -253,6 +259,18 @@ export const PrescripcionesPage = () => {
             </Grid>
           ))}
         </Grid>
+        <TablePagination
+          component="div"
+          count={totalElements}
+          page={page}
+          rowsPerPage={pageSize}
+          rowsPerPageOptions={[10, 20, 50]}
+          onPageChange={(_, p) => setPage(p)}
+          onRowsPerPageChange={(e) => { setPageSize(parseInt(e.target.value, 10)); setPage(0); }}
+          labelRowsPerPage="Filas:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+        />
+        </>
       )}
 
       {/* Dialog Crear/Editar */}
