@@ -39,6 +39,11 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
 } from 'recharts';
 import { patientService } from '@services/patient.service';
 import { seguimientoService } from '@services/seguimientoService';
@@ -212,6 +217,55 @@ const fetchReportData = async (tipo: string): Promise<Record<string, unknown>[]>
         Estado: i.estado ?? '',
       }));
     }
+    case 'Adherencia Seguimientos': {
+      const res = await seguimientoService.listar({ page: 0, size: 500 });
+      const items = Array.isArray(res) ? res : ((res as any).content ?? []);
+      const grouped: Record<string, { total: number; efectivos: number }> = {};
+      (items as any[]).forEach((s) => {
+        const raw = s.fechaProgramada ?? '';
+        if (!raw) return;
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!grouped[key]) grouped[key] = { total: 0, efectivos: 0 };
+        grouped[key].total++;
+        if (String(s.estado).toUpperCase().includes('EFECTIV') || String(s.estado).toUpperCase().includes('REALIZ')) {
+          grouped[key].efectivos++;
+        }
+      });
+      return Object.entries(grouped)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([mes, v]) => ({
+          Mes: mes,
+          TotalSeguimientos: v.total,
+          Efectivos: v.efectivos,
+          'Adherencia%': v.total > 0 ? `${Math.round((v.efectivos / v.total) * 100)}%` : '0%',
+        }));
+    }
+    case 'Barreras por Categoría': {
+      const res = await barrierService.listar();
+      const items = Array.isArray(res) ? res : ((res as any).content ?? []);
+      const catMap: Record<string, number> = {};
+      (items as any[]).forEach((b) => {
+        const cat = b.category ?? b.tipo ?? 'Sin categoría';
+        catMap[cat] = (catMap[cat] ?? 0) + 1;
+      });
+      return Object.entries(catMap)
+        .sort(([, a], [, b]) => b - a)
+        .map(([cat, count]) => ({ Categoría: cat, Total: count }));
+    }
+    case 'Evolución de Estados': {
+      const res = await patientService.getPatients();
+      const patients = Array.isArray(res) ? res : ((res as any).content ?? []);
+      const stateMap: Record<string, number> = {};
+      (patients as any[]).forEach((p) => {
+        const est = p.status ?? p.estado ?? 'DESCONOCIDO';
+        stateMap[est] = (stateMap[est] ?? 0) + 1;
+      });
+      return Object.entries(stateMap)
+        .sort(([, a], [, b]) => b - a)
+        .map(([estado, count]) => ({ Estado: estado, Pacientes: count }));
+    }
     case 'Servicios Especiales': {
       const res = await servicioComplementarioService.listar();
       const items = Array.isArray(res) ? res : ((res as any).content ?? []);
@@ -229,7 +283,8 @@ const fetchReportData = async (tipo: string): Promise<Record<string, unknown>[]>
   }
 };
 
-const tipoReportes = ['Pacientes', 'Seguimientos', 'Entregas', 'Aplicaciones', 'Barreras', 'Paraclínicos', 'Prescripciones', 'Transportes', 'Inventarios', 'Servicios Especiales'];
+const tipoReportes = ['Pacientes', 'Seguimientos', 'Entregas', 'Aplicaciones', 'Barreras', 'Paraclínicos', 'Prescripciones', 'Transportes', 'Inventarios', 'Servicios Especiales', 'Adherencia Seguimientos', 'Barreras por Categoría', 'Evolución de Estados'];
+const PIE_COLORS = ['#0E7490','#166534','#7C3AED','#D97706','#DC2626','#0284C7','#4F46E5','#15803D'];
 const estadoOptions = ['Todos', 'Activo', 'Inactivo', 'Pendiente', 'Completado'];
 
 const MES_LABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -523,8 +578,39 @@ const ReportesPage = () => {
             >
               <CardContent sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight={700} mb={2}>
-                  Tendencia del Período
+                  {tipoReporte === 'Barreras por Categoría' ? 'Distribución por Categoría' : tipoReporte === 'Evolución de Estados' ? 'Estados de Pacientes' : 'Tendencia del Período'}
                 </Typography>
+                {tipoReporte === 'Barreras por Categoría' ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={datosReporte as any} dataKey="Total" nameKey="Categoría" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {(datosReporte as any[]).map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : tipoReporte === 'Evolución de Estados' ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={datosReporte as any} dataKey="Pacientes" nameKey="Estado" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {(datosReporte as any[]).map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : tipoReporte === 'Adherencia Seguimientos' ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={datosReporte as any}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                      <XAxis dataKey="Mes" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                      <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <Line type="monotone" dataKey="TotalSeguimientos" name="Total" stroke="#0E7490" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="Efectivos" name="Efectivos" stroke="#166534" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={chartData.length > 0 ? chartData : [{ mes: '—', registros: 0 }]}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -563,6 +649,7 @@ const ReportesPage = () => {
                     />
                   </BarChart>
                 </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </motion.div>
