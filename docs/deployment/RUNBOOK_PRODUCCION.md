@@ -46,6 +46,24 @@
 | 004 | `supabase/migration_v4_campos_nuevos.pgsql` | Aplicado |
 | **005** | `backend/supabase/migrations/005_security_hardening.sql` | **Pendiente** |
 | **006** | `backend/supabase/migrations/006_fix_consentimientos.sql` | **Pendiente** |
+| **007** | `supabase/migration_v6_notifications_generator.pgsql` | **Pendiente** |
+| **008** | `supabase/migration_v7_patient_code_trigger.pgsql` | **Pendiente** |
+| **009** | `supabase/migration_v8_rams.pgsql` | **Pendiente** |
+| **010** | `supabase/migration_v9_dashboard_filters.pgsql` | **Pendiente** |
+
+> **ORDEN OBLIGATORIO**: aplicar en secuencia 005 → 006 → 007 → 008 → 009 → 010.
+> Cada migración puede depender de objetos creados en la anterior.
+
+### Qué hace cada migración pendiente
+
+| Migración | Descripción |
+|-----------|-------------|
+| `005_security_hardening.sql` | RLS real por tenant en todas las tablas operativas + `auth_tenant_id()` |
+| `006_fix_consentimientos.sql` | UNIQUE constraint en `consentimientos(patient_id)` |
+| `migration_v6_notifications_generator.pgsql` | Función `fn_generate_notifications` + pg_cron scheduling |
+| `migration_v7_patient_code_trigger.pgsql` | Trigger `trg_assign_patient_code` → auto-asigna PSP0001, PSP0002... |
+| `migration_v8_rams.pgsql` | Tabla `rams` con RLS + trigger notificación automática al registrar RAM |
+| `migration_v9_dashboard_filters.pgsql` | Extiende `get_dashboard_stats` con filtros por programa y laboratorio |
 
 ### Cómo ejecutar en Supabase SQL Editor
 
