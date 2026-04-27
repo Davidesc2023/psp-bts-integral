@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Grid, Card, CardContent, Typography, Chip, Skeleton } from '@mui/material';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Box, Grid, Card, CardContent, Typography, Chip, Skeleton,
+  FormControl, InputLabel, Select, MenuItem, SelectChangeEvent,
+} from '@mui/material';
+import { FilterList } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import {
   People,
@@ -9,6 +13,8 @@ import {
   CheckCircle,
 } from '@mui/icons-material';
 import { dashboardService, DashboardStats } from '@/services/dashboardService';
+import { catalogService } from '@/services/catalog.service';
+import { ProgramaPSP, Laboratory } from '@/types';
 
 // Importar componentes especializados
 import { EntregasChart } from './components/EntregasChart';
@@ -53,17 +59,34 @@ interface TopKPI {
 export const DashboardPageEnriched: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [programas, setProgramas] = useState<ProgramaPSP[]>([]);
+  const [labs, setLabs] = useState<Laboratory[]>([]);
+  const [programaFilter, setProgramaFilter] = useState<string>('');
+  const [laboratorioFilter, setLaboratorioFilter] = useState<string>('');
 
+  // Cargar catálogos una sola vez
   useEffect(() => {
+    catalogService.getProgramas().then(setProgramas).catch(() => {});
+    catalogService.getLaboratories().then(setLabs).catch(() => {});
+  }, []);
+
+  const fetchStats = useCallback(() => {
+    setLoading(true);
     dashboardService
-      .getStats()
+      .getStats({
+        programaId: programaFilter || undefined,
+        laboratorioId: laboratorioFilter ? Number(laboratorioFilter) : undefined,
+      })
       .then((data) => setStats(data))
       .catch(() => {
-        // Error silencioso - el dashboard muestra "—" en los KPIs cuando no hay datos
         console.warn('Dashboard: backend no disponible, mostrando datos vacíos.');
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [programaFilter, laboratorioFilter]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   // Top KPIs principales — datos reales
   const topKPIs: TopKPI[] = [
@@ -168,6 +191,45 @@ export const DashboardPageEnriched: React.FC = () => {
                     },
                   }}
                 />
+              </Box>
+
+              {/* Filtros por programa y laboratorio */}
+              <Box display="flex" alignItems="center" gap={2} mt={2} flexWrap="wrap">
+                <FilterList sx={{ color: '#6B7280', fontSize: 20 }} />
+                <FormControl size="small" sx={{ minWidth: 220 }}>
+                  <InputLabel>Programa PSP</InputLabel>
+                  <Select
+                    value={programaFilter}
+                    label="Programa PSP"
+                    onChange={(e: SelectChangeEvent) => setProgramaFilter(e.target.value)}
+                  >
+                    <MenuItem value="">Todos los programas</MenuItem>
+                    {programas.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>{p.nombre}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Laboratorio</InputLabel>
+                  <Select
+                    value={laboratorioFilter}
+                    label="Laboratorio"
+                    onChange={(e: SelectChangeEvent) => setLaboratorioFilter(e.target.value)}
+                  >
+                    <MenuItem value="">Todos los laboratorios</MenuItem>
+                    {labs.map((l) => (
+                      <MenuItem key={l.id} value={String(l.id)}>{l.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {(programaFilter || laboratorioFilter) && (
+                  <Chip
+                    label="Limpiar filtros"
+                    size="small"
+                    onDelete={() => { setProgramaFilter(''); setLaboratorioFilter(''); }}
+                    sx={{ bgcolor: '#FEE2E2', color: '#991B1B', fontWeight: 600 }}
+                  />
+                )}
               </Box>
             </Box>
           </motion.div>
