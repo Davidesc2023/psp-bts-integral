@@ -71,7 +71,27 @@ interface Seguimiento {
   observaciones?: string;
   modalidad?: string;
   titulo?: string;
+  diasRestantes?: number;
 }
+
+const calcDiasRestantes = (fecha: string): number =>
+  Math.ceil((new Date(fecha).getTime() - Date.now()) / 86_400_000);
+
+const getPrioLabel = (dias: number | undefined): string => {
+  if (dias === undefined) return 'Sin fecha';
+  if (dias < 0) return 'Vencido';
+  if (dias <= 3) return 'Alta';
+  if (dias <= 7) return 'Media';
+  return 'Normal';
+};
+
+const PRIO_COLORS: Record<string, { bg: string; text: string }> = {
+  Vencido: { bg: '#7f1d1d', text: '#ffffff' },
+  Alta:    { bg: '#fee2e2', text: '#b91c1c' },
+  Media:   { bg: '#fef3c7', text: '#d97706' },
+  Normal:  { bg: '#dcfce7', text: '#15803d' },
+  'Sin fecha': { bg: '#f3f4f6', text: '#6b7280' },
+};
 
 
 
@@ -278,11 +298,15 @@ const FollowupsPage = () => {
   const getPrioColor = (p: string) => ({ ALTA: '#d32f2f', MEDIA: '#f57c00', BAJA: '#388e3c' }[p] || '#757575');
   const getTypeColor = (t: string) => ({ SEGUIMIENTO_CLINICO:'#9c27b0', EDUCACION_PACIENTE:'#2196f3', ADHERENCIA:'#4caf50', ACOMPANAMIENTO_EPS:'#ff9800', CITA_MEDICA:'#e91e63' }[t] || '#024d56');
 
-  const filtered = seguimientos.filter((s) =>
-    s.patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.titulo || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const programados = filtered.filter((s) => s.estado === 'PROGRAMADO');
+  const filtered = seguimientos
+    .map((s) => ({ ...s, diasRestantes: s.fechaProgramada ? calcDiasRestantes(s.fechaProgramada) : undefined }))
+    .filter((s) =>
+      s.patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.titulo || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  const programados = filtered
+    .filter((s) => s.estado === 'PROGRAMADO')
+    .sort((a, b) => (a.diasRestantes ?? 999) - (b.diasRestantes ?? 999));
   const completados = filtered.filter((s) => ['EFECTIVO','NO_EFECTIVO'].includes(s.estado));
 
   const renderCard = (seg: Seguimiento, index: number) => (
@@ -303,7 +327,11 @@ const FollowupsPage = () => {
                 <Stack direction="row" spacing={1} mb={1} flexWrap="wrap" useFlexGap>
                   <Chip label={getTipoLabel(seg.tipoSeguimiento)} size="small" sx={{ bgcolor: `${getTypeColor(seg.tipoSeguimiento)}20`, color: getTypeColor(seg.tipoSeguimiento), fontWeight: 600 }} />
                   <Chip label={seg.tipoContacto} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
-                  <Chip label={seg.prioridad} size="small" sx={{ bgcolor: `${getPrioColor(seg.prioridad)}20`, color: getPrioColor(seg.prioridad), fontWeight: 600 }} />
+                  {(() => {
+                    const label = getPrioLabel(seg.diasRestantes);
+                    const colors = PRIO_COLORS[label];
+                    return <Chip label={label} size="small" sx={{ bgcolor: colors.bg, color: colors.text, fontWeight: 700, fontSize: '0.7rem' }} />;
+                  })()}
                 </Stack>
                 {seg.motivoSeguimiento && <Typography variant="body2" color="text.secondary" mb={1}>{seg.motivoSeguimiento}</Typography>}
                 <Stack direction="row" alignItems="center" gap={0.5}>

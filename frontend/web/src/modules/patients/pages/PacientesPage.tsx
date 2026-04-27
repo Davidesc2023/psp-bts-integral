@@ -134,6 +134,27 @@ const PacientesPage = () => {
       renderCell: () => <Checkbox size="small" />,
     },
     {
+      field: 'codigoPaciente',
+      headerName: 'Código',
+      width: 100,
+      renderCell: (params) => (
+        <Box
+          sx={{
+            fontFamily: 'monospace',
+            fontWeight: 700,
+            fontSize: '0.75rem',
+            bgcolor: theme.palette.primary.main + '15',
+            color: theme.palette.primary.dark,
+            px: 1,
+            py: 0.25,
+            borderRadius: 1,
+          }}
+        >
+          {params.value || '—'}
+        </Box>
+      ),
+    },
+    {
       field: 'documentoIdentidad',
       headerName: 'Documento',
       width: 130,

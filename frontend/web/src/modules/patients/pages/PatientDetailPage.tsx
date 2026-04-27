@@ -72,9 +72,29 @@ const PatientDetailPage = () => {
         <Typography color="text.primary">Detalle</Typography>
       </Breadcrumbs>
 
-      <Typography variant="h4" gutterBottom fontWeight="bold" color="#111827">
-        {patient.nombreCompleto}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap', mb: 0.5 }}>
+        <Typography variant="h4" fontWeight="bold" color="#111827">
+          {patient.nombreCompleto}
+        </Typography>
+        {patient.codigoPaciente && (
+          <Box
+            component="span"
+            sx={{
+              fontFamily: 'monospace',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              bgcolor: '#e0f2fe',
+              color: '#0369a1',
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 1.5,
+              letterSpacing: '0.05em',
+            }}
+          >
+            {patient.codigoPaciente}
+          </Box>
+        )}
+      </Box>
       <Typography variant="body1" color="#6b7280" sx={{ mb: 3 }}>
         CC {patient.documentoIdentidad}
       </Typography>
