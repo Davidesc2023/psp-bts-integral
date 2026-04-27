@@ -28,12 +28,27 @@ CREATE INDEX IF NOT EXISTS idx_rams_fecha       ON rams(fecha_ram DESC);
 ALTER TABLE rams ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "rams_tenant_isolation" ON rams;
-CREATE POLICY "rams_tenant_isolation" ON rams
-  USING (tenant_id = (
-    SELECT tenant_id FROM user_tenant_assignments
-    WHERE user_id = auth.uid() AND activo = true
-    LIMIT 1
-  ));
+DROP POLICY IF EXISTS "rams_tenant_select" ON rams;
+DROP POLICY IF EXISTS "rams_tenant_insert" ON rams;
+DROP POLICY IF EXISTS "rams_tenant_update" ON rams;
+DROP POLICY IF EXISTS "rams_tenant_delete" ON rams;
+
+CREATE POLICY "rams_tenant_select" ON rams
+  FOR SELECT TO authenticated
+  USING (tenant_id = auth_tenant_id());
+
+CREATE POLICY "rams_tenant_insert" ON rams
+  FOR INSERT TO authenticated
+  WITH CHECK (tenant_id = auth_tenant_id());
+
+CREATE POLICY "rams_tenant_update" ON rams
+  FOR UPDATE TO authenticated
+  USING (tenant_id = auth_tenant_id())
+  WITH CHECK (tenant_id = auth_tenant_id());
+
+CREATE POLICY "rams_tenant_delete" ON rams
+  FOR DELETE TO authenticated
+  USING (tenant_id = auth_tenant_id());
 
 -- Trigger updated_at
 CREATE OR REPLACE FUNCTION update_rams_updated_at()
