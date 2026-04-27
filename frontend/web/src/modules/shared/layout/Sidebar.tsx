@@ -53,6 +53,8 @@ interface NavItem {
   icon: React.ReactNode;
   path: string;
   badge?: number;
+  /** If defined, only users with one of these roles see the item. Undefined = visible to all. */
+  roles?: string[];
 }
 
 interface SidebarProps {
@@ -92,22 +94,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ open: externalOpen }) => {
     staleTime: 30000,
   });
 
+  // Roles with full access (no nav filtering needed)
+  const FULL_ACCESS_ROLES = ['SUPER_ADMIN', 'ADMIN_INSTITUCION', 'MEDICO', 'ENFERMERIA', 'COORDINADOR', 'FARMACEUTICA', 'AUDITOR'];
+  // EDUCADORA: patient-facing clinical follow-up modules only
+  const EDUCADORA_ALLOWED = ['EDUCADORA'];
+  // MSL: analytics and reporting only
+  const MSL_ALLOWED = ['MSL'];
+
   const navItems: NavItem[] = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
     { text: 'Pacientes', icon: <People />, path: '/patients', badge: patientsCount || undefined },
     { text: 'Seguimientos', icon: <Assignment />, path: '/followups' },
-    { text: 'Barreras', icon: <Block />, path: '/barriers', badge: barriersCount || undefined },
-    { text: 'Paraclínicos', icon: <Science />, path: '/diagnostics' },
-    { text: 'Prescripciones', icon: <Medication />, path: '/prescriptions' },
-    { text: 'Aplicaciones', icon: <CalendarMonth />, path: '/applications' },
-    { text: 'Entregas', icon: <LocalShipping />, path: '/deliveries' },
-    { text: 'Transportes', icon: <DirectionsCar />, path: '/transport' },
-    { text: 'Inventario', icon: <Inventory2 />, path: '/inventory' },
-    { text: 'Serv. Especiales', icon: <MedicalServices />, path: '/special-services' },
-    { text: 'Consultas Médicas', icon: <LocalHospital />, path: '/consultas' },
-    { text: 'Consentimientos', icon: <Handshake />, path: '/consents' },
-    { text: 'Reportes', icon: <Assessment />, path: '/reports' },
+    { text: 'Barreras', icon: <Block />, path: '/barriers', badge: barriersCount || undefined, roles: [...FULL_ACCESS_ROLES, ...EDUCADORA_ALLOWED] },
+    { text: 'Paraclínicos', icon: <Science />, path: '/diagnostics', roles: FULL_ACCESS_ROLES },
+    { text: 'Prescripciones', icon: <Medication />, path: '/prescriptions', roles: FULL_ACCESS_ROLES },
+    { text: 'Aplicaciones', icon: <CalendarMonth />, path: '/applications', roles: [...FULL_ACCESS_ROLES, ...EDUCADORA_ALLOWED] },
+    { text: 'Entregas', icon: <LocalShipping />, path: '/deliveries', roles: [...FULL_ACCESS_ROLES, ...EDUCADORA_ALLOWED] },
+    { text: 'Transportes', icon: <DirectionsCar />, path: '/transport', roles: [...FULL_ACCESS_ROLES, ...EDUCADORA_ALLOWED] },
+    { text: 'Inventario', icon: <Inventory2 />, path: '/inventory', roles: FULL_ACCESS_ROLES },
+    { text: 'Serv. Especiales', icon: <MedicalServices />, path: '/special-services', roles: FULL_ACCESS_ROLES },
+    { text: 'Consultas Médicas', icon: <LocalHospital />, path: '/consultas', roles: FULL_ACCESS_ROLES },
+    { text: 'Consentimientos', icon: <Handshake />, path: '/consents', roles: [...FULL_ACCESS_ROLES, ...MSL_ALLOWED] },
+    { text: 'Reportes', icon: <Assessment />, path: '/reports', roles: [...FULL_ACCESS_ROLES, ...MSL_ALLOWED] },
   ];
+
+  const visibleNavItems = navItems.filter(
+    (item) => !item.roles || !user?.role || item.roles.includes(user.role)
+  );
 
   const isAdminUser =
     user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_INSTITUCION';
@@ -236,7 +249,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open: externalOpen }) => {
 
       {/* Navigation Items */}
       <List sx={{ flexGrow: 1, px: 1, py: 2 }}>
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <Tooltip
             key={item.path}
             title={!open ? item.text : ''}
