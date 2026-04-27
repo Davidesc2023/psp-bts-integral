@@ -12,6 +12,7 @@ import {
   Medication,
   LocalPharmacy,
   History,
+  Tune,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -100,6 +101,13 @@ const adminCards: AdminCard[] = [
     icon: <History sx={{ fontSize: 40 }} />,
     path: '/admin/auditoria',
     color: '#6D28D9',
+  },
+  {
+    title: 'Estados de Paciente',
+    description: 'Configura los estados disponibles y sus campos requeridos',
+    icon: <Tune sx={{ fontSize: 40 }} />,
+    path: '/admin/estados-config',
+    color: '#0E7490',
   },
 ];
 

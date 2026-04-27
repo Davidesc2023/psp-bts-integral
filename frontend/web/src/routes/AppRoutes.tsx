@@ -22,6 +22,7 @@ const TiposParaclinicoAdminPage = lazy(() => import('@modules/admin/pages/TiposP
 const MedicamentosAdminPage = lazy(() => import('@modules/admin/pages/MedicamentosAdminPage'));
 const MedicosAdminPage = lazy(() => import('@modules/admin/pages/MedicosAdminPage'));
 const AuditoriaPage = lazy(() => import('@modules/admin/pages/AuditoriaPage'));
+const EstadosConfigPage = lazy(() => import('@modules/admin/pages/EstadosConfigPage'));
 const PacientesPage = lazy(() => import('@modules/patients/pages/PacientesPage'));
 const PatientDetailPage = lazy(() => import('@modules/patients/pages/PatientDetailPage'));
 const PacienteFormPage = lazy(() => import ('@modules/patients/pages/PacienteFormPage'));
@@ -345,6 +346,14 @@ export const AppRoutes = () => {
               element={
                 <Suspense fallback={<LoadingFallback />}>
                   <AuditoriaPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/admin/estados-config"
+              element={
+                <Suspense fallback={<LoadingFallback />}>
+                  <EstadosConfigPage />
                 </Suspense>
               }
             />
