@@ -23,6 +23,7 @@ import {
   Security as SecurityIcon,
   Tune as TuneIcon,
   Save as SaveIcon,
+  School as SchoolIcon,
 } from '@mui/icons-material';
 import { supabase } from '@services/supabaseClient';
 import { getCurrentTenantId } from '@/utils/getCurrentTenant';
@@ -136,6 +137,18 @@ const ConfiguracionPage: React.FC = () => {
               <InfoRow label="Versión" value="1.0.0" />
               <InfoRow label="Entorno" value={entorno} />
               <InfoRow label="API Base URL" value={apiUrl} mono />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<SchoolIcon />}
+                sx={{ alignSelf: 'flex-start', borderRadius: '8px', textTransform: 'none', borderColor: ACCENT, color: ACCENT, mt: 1 }}
+                onClick={() => {
+                  try { localStorage.removeItem('psp_onboarding_done'); } catch { /* */ }
+                  window.location.reload();
+                }}
+              >
+                Ver tutorial de bienvenida
+              </Button>
             </CardContent>
           </Card>
         </Grid>
