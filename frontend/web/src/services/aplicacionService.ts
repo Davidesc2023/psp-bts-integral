@@ -1,5 +1,58 @@
 import { supabase } from './supabaseClient';
-import { withTenant } from '@/utils/getCurrentTenant';
+import { withTenant, getCurrentTenantId } from '@/utils/getCurrentTenant';
+
+// TASK-010: Descuenta 1 unidad del inventario del paciente al registrar una aplicación.
+// Usa el medicamento de la prescripción como primer criterio de búsqueda.
+// Si no existe fila de inventario, no lanza error (silently skip).
+async function descontarUnidadInventario(pacienteId: number, prescripcionId: number): Promise<void> {
+  try {
+    // Buscar medicamento_id en la prescripción
+    const { data: presc } = await supabase
+      .from('prescripciones')
+      .select('medicamento_id')
+      .eq('id', prescripcionId)
+      .maybeSingle();
+
+    // Buscar fila de inventario activa con stock > 0
+    let q = supabase
+      .from('inventario_paciente')
+      .select('id, cantidad_disponible, cantidad_aplicada, tenant_id')
+      .eq('paciente_id', pacienteId)
+      .gt('cantidad_disponible', 0);
+
+    if (presc?.medicamento_id) {
+      q = q.eq('medicamento_id', presc.medicamento_id);
+    }
+
+    const { data: rows } = await q.limit(1);
+    if (!rows || rows.length === 0) return;
+
+    const inv = rows[0];
+    const newDisp = Math.max(0, (inv.cantidad_disponible ?? 0) - 1);
+    const newAplic = (inv.cantidad_aplicada ?? 0) + 1;
+
+    await supabase
+      .from('inventario_paciente')
+      .update({
+        cantidad_disponible: newDisp,
+        cantidad_aplicada: newAplic,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', inv.id);
+
+    // Registrar movimiento
+    const tenantId = await getCurrentTenantId();
+    await supabase.from('movimientos_inventario').insert({
+      inventario_id: inv.id,
+      tipo_movimiento: 'APLICACION',
+      cantidad: 1,
+      observaciones: 'Descuento automático por aplicación registrada',
+      tenant_id: tenantId,
+    });
+  } catch {
+    // No bloquear la aplicación si el inventario falla
+  }
+}
 import type {
   Aplicacion,
   CreateAplicacionRequest,
@@ -137,6 +190,10 @@ export const aplicacionService = {
       .select()
       .single();
     if (error) throw error;
+
+    // TASK-010: Descontar unidad del inventario del paciente
+    await descontarUnidadInventario(data.paciente_id, data.prescripcion_id);
+
     return mapRow(data);
   },
 

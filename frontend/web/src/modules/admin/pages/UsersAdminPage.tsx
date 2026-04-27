@@ -18,8 +18,13 @@ import {
   Chip,
   Tooltip,
   IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
 } from '@mui/material';
-import { Add, Search, ManageAccounts } from '@mui/icons-material';
+import { Add, Search, ManageAccounts, AssignmentInd, Delete } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -41,6 +46,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { Edit, ToggleOn, ToggleOff } from '@mui/icons-material';
+import { supabase } from '@services/supabaseClient';
+import { getCurrentTenantId } from '@/utils/getCurrentTenant';
 
 const ALL_ROLES: AdminUserRole[] = [
   'SUPER_ADMIN',
@@ -115,6 +122,10 @@ const UsersAdminPage: React.FC = () => {
   const [changeRoleUser, setChangeRoleUser] = useState<AdminUser | null>(null);
   const [newRole, setNewRole] = useState<AdminUserRole>('MEDICO');
 
+  // Assignments dialog
+  const [assignUser, setAssignUser] = useState<AdminUser | null>(null);
+  const [newProgramaId, setNewProgramaId] = useState<string>('');
+
   const queryKey = ['admin-users', search, roleFilter, page, pageSize];
 
   const { data, isLoading } = useQuery({
@@ -164,6 +175,73 @@ const UsersAdminPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       setChangeRoleUser(null);
     },
+  });
+
+  // Programas query (for assignment dialog)
+  const { data: programas = [] } = useQuery<{ id: string; nombre: string }[]>({
+    queryKey: ['programas-psp-assign'],
+    queryFn: async () => {
+      const tenantId = await getCurrentTenantId();
+      const { data, error } = await supabase
+        .from('programas_psp')
+        .select('id, nombre')
+        .eq('tenant_id', tenantId)
+        .order('nombre');
+      if (error) throw error;
+      return data as { id: string; nombre: string }[];
+    },
+    enabled: !!assignUser,
+  });
+
+  // Assignments query
+  const { data: assignments = [] } = useQuery<{ id: string; programa_id: string; programaNombre: string }[]>({
+    queryKey: ['user-assignments', assignUser?.id],
+    queryFn: async () => {
+      if (!assignUser) return [];
+      const { data, error } = await supabase
+        .from('user_program_assignments')
+        .select('id, programa_id, programas_psp(nombre)')
+        .eq('user_id', assignUser.id)
+        .eq('activo', true);
+      if (error) throw error;
+      return (data as any[]).map((r) => ({
+        id: r.id,
+        programa_id: r.programa_id,
+        programaNombre: r.programas_psp?.nombre ?? 'Sin nombre',
+      }));
+    },
+    enabled: !!assignUser,
+  });
+
+  const addAssignMutation = useMutation({
+    mutationFn: async ({ userId, programaId }: { userId: string; programaId: string }) => {
+      const tenantId = await getCurrentTenantId();
+      const { error } = await supabase
+        .from('user_program_assignments')
+        .insert({ user_id: userId, programa_id: programaId, tenant_id: tenantId, activo: true });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-assignments', assignUser?.id] });
+      setNewProgramaId('');
+      toast.success('Programa asignado');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const removeAssignMutation = useMutation({
+    mutationFn: async (assignId: string) => {
+      const { error } = await supabase
+        .from('user_program_assignments')
+        .update({ activo: false })
+        .eq('id', assignId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-assignments', assignUser?.id] });
+      toast.success('Asignación removida');
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const openCreate = useCallback(() => {
@@ -334,6 +412,17 @@ const UsersAdminPage: React.FC = () => {
                             <ManageAccounts fontSize="small" />
                           </IconButton>
                         </Tooltip>
+                        {(user.role === 'EDUCADORA' || user.role === 'MSL' || user.role === 'COORDINADOR') && (
+                          <Tooltip title="Programas asignados">
+                            <IconButton
+                              size="small"
+                              onClick={() => setAssignUser(user)}
+                              sx={{ color: '#0E7490' }}
+                            >
+                              <AssignmentInd fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -517,6 +606,64 @@ const UsersAdminPage: React.FC = () => {
           >
             {changeRoleMutation.isPending ? 'Guardando...' : 'Cambiar rol'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Assignments Dialog */}
+      <Dialog open={!!assignUser} onClose={() => setAssignUser(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Programas de {assignUser?.nombre} {assignUser?.apellido}</DialogTitle>
+        <DialogContent dividers>
+          {/* Add new assignment */}
+          <Stack direction="row" gap={1} mb={2}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Programa</InputLabel>
+              <Select
+                label="Programa"
+                value={newProgramaId}
+                onChange={(e) => setNewProgramaId(e.target.value)}
+              >
+                {programas.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>{p.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="contained"
+              disabled={!newProgramaId || addAssignMutation.isPending}
+              onClick={() => assignUser && addAssignMutation.mutate({ userId: assignUser.id, programaId: newProgramaId })}
+              sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+            >
+              + Asignar
+            </Button>
+          </Stack>
+          <Divider />
+          {/* Current assignments */}
+          {assignments.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+              Sin programas asignados
+            </Typography>
+          ) : (
+            <List dense>
+              {assignments.map((a) => (
+                <ListItem key={a.id}>
+                  <ListItemText primary={a.programaNombre} secondary={a.programa_id} />
+                  <ListItemSecondaryAction>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => removeAssignMutation.mutate(a.id)}
+                      disabled={removeAssignMutation.isPending}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignUser(null)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
     </Box>
