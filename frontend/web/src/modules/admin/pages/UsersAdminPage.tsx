@@ -65,6 +65,7 @@ const ROLE_LABELS: Record<AdminUserRole, string> = {
   AUDITOR: 'Auditor',
   PACIENTE: 'Paciente',
   CUIDADOR: 'Cuidador',
+  MSL: 'MSL',
 };
 
 const ROLE_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'> = {

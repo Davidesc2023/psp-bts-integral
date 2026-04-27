@@ -1,16 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Box,
   Typography,
   Drawer,
   IconButton,
-  List,
-  ListItem,
   Avatar,
   Button,
-  Divider,
   Tooltip,
   Badge,
+  CircularProgress,
 } from '@mui/material';
 import {
   Close,
@@ -20,101 +18,61 @@ import {
   MarkEmailRead,
   Error,
   CalendarToday,
+  Science,
+  Person,
+  LocalShipping,
+  AssignmentLate,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNotificacionesUnread } from '@/hooks/useNotificaciones';
+import {
+  marcarLeida as svcMarcarLeida,
+  marcarTodasLeidas as svcMarcarTodasLeidas,
+} from '@/services/notificacionesService';
+import { getCurrentTenantId } from '@/utils/getCurrentTenant';
+import { authStore } from '@/stores/auth.store';
+import {
+  NOTIF_UI_CONFIG,
+  MODULO_FALLBACK_ROUTES,
+  type Notificacion,
+  type NotifTipo,
+} from '@/types/notificaciones.types';
 
-type NotifTipo = 'ALERTA' | 'RECORDATORIO' | 'INFO' | 'TAREA';
 
-interface Notificacion {
-  id: number;
-  tipo: NotifTipo;
-  titulo: string;
-  descripcion: string;
-  timestamp: string;
-  leida: boolean;
+const NOTIF_ICONS: Record<string, React.ReactNode> = {
+  warning: <Warning />,
+  calendar: <CalendarToday />,
+  info: <Info />,
+  error: <Error />,
+  science: <Science />,
+  person: <Person />,
+  delivery: <LocalShipping />,
+  task: <AssignmentLate />,
+};
+
+function getNotifIcon(tipo: NotifTipo): React.ReactNode {
+  const iconKey = NOTIF_UI_CONFIG[tipo]?.icon ?? 'info';
+  return NOTIF_ICONS[iconKey] ?? <Info />;
 }
 
-const notificacionesIniciales: Notificacion[] = [
-  {
-    id: 1,
-    tipo: 'ALERTA',
-    titulo: 'Resultado Crítico',
-    descripcion: 'Paciente María González — Resultado crítico en hemograma (3.2 mil/µL)',
-    timestamp: 'Hace 10 min',
-    leida: false,
-  },
-  {
-    id: 2,
-    tipo: 'RECORDATORIO',
-    titulo: 'Próxima Entrega de Medicamentos',
-    descripcion: 'Pedro Ramírez — Entrega programada para mañana a las 10:00 am',
-    timestamp: 'Hace 1 hora',
-    leida: false,
-  },
-  {
-    id: 3,
-    tipo: 'INFO',
-    titulo: 'Nuevo Seguimiento Registrado',
-    descripcion: 'Juan López — Seguimiento de adherencia completado por Teresa Álvarez',
-    timestamp: 'Hace 2 horas',
-    leida: false,
-  },
-  {
-    id: 4,
-    tipo: 'TAREA',
-    titulo: 'Tarea Pendiente Vence Hoy',
-    descripcion: 'Educadora Teresa — Gestión de barrera económica pendiente de resolución',
-    timestamp: 'Hace 3 horas',
-    leida: true,
-  },
-  {
-    id: 5,
-    tipo: 'ALERTA',
-    titulo: 'Stock Crítico de Medicamento',
-    descripcion: 'Bevacizumab 400mg — Solo 3 unidades disponibles (mínimo: 10)',
-    timestamp: 'Hace 5 horas',
-    leida: true,
-  },
-  {
-    id: 6,
-    tipo: 'INFO',
-    titulo: 'Sistema Actualizado',
-    descripcion: 'PSP actualizado a la versión v2.1.0 con nuevas funcionalidades',
-    timestamp: 'Ayer 18:00',
-    leida: true,
-  },
-];
+function formatTimestamp(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffD = Math.floor(diffMs / 86400000);
 
-const tipoConfig: Record<
-  NotifTipo,
-  { color: string; bg: string; icon: React.ReactNode; borderColor: string }
-> = {
-  ALERTA: {
-    color: '#DC2626',
-    bg: '#FEE2E2',
-    icon: <Error />,
-    borderColor: '#FECACA',
-  },
-  RECORDATORIO: {
-    color: '#D97706',
-    bg: '#FEF3C7',
-    icon: <CalendarToday />,
-    borderColor: '#FDE68A',
-  },
-  INFO: {
-    color: '#1D4ED8',
-    bg: '#DBEAFE',
-    icon: <Info />,
-    borderColor: '#BFDBFE',
-  },
-  TAREA: {
-    color: '#D97706',
-    bg: '#FEF3C7',
-    icon: <NotificationsNone />,
-    borderColor: '#FDE68A',
-  },
-};
+  if (diffMin < 1) return 'Ahora';
+  if (diffMin < 60) return `Hace ${diffMin} min`;
+  if (diffH < 24) return `Hace ${diffH} hora${diffH > 1 ? 's' : ''}`;
+  if (diffD === 1) return 'Ayer';
+  return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+}
+
 
 interface NotificationsDrawerProps {
   open: boolean;
@@ -125,22 +83,46 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   open,
   onClose,
 }) => {
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>(
-    notificacionesIniciales
-  );
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const user = authStore((state) => state.user);
+  const { notifications, isLoading } = useNotificacionesUnread();
 
-  const noLeidas = notificaciones.filter((n) => !n.leida).length;
+  const noLeidas = notifications.length;
 
-  const marcarLeida = (id: number) => {
-    setNotificaciones((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, leida: true } : n))
-    );
+  const handleMarcarLeida = async (notif: Notificacion) => {
+    try {
+      await svcMarcarLeida(notif.id);
+      queryClient.invalidateQueries({ queryKey: ['notifications-count', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread', user?.id] });
+    } catch {
+      toast.error('No se pudo marcar como leída');
+    }
   };
 
-  const marcarTodasLeidas = () => {
-    setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
-    toast.success('Todas las notificaciones marcadas como leídas');
+  const handleClickNotif = async (notif: Notificacion) => {
+    await handleMarcarLeida(notif);
+    onClose();
+    if (notif.nav_url) {
+      navigate(notif.nav_url);
+    } else if (notif.modulo && MODULO_FALLBACK_ROUTES[notif.modulo]) {
+      navigate(MODULO_FALLBACK_ROUTES[notif.modulo]);
+    }
   };
+
+  const handleMarcarTodasLeidas = async () => {
+    if (!user?.id) return;
+    try {
+      const tenantId = await getCurrentTenantId();
+      await svcMarcarTodasLeidas(tenantId, user.id);
+      queryClient.invalidateQueries({ queryKey: ['notifications-count', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread', user.id] });
+      toast.success('Todas las notificaciones marcadas como leídas');
+    } catch {
+      toast.error('No se pudo completar la acción');
+    }
+  };
+
 
   return (
     <Drawer
@@ -223,9 +205,20 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
       {/* Lista de notificaciones */}
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1.5 }}>
+        {isLoading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={28} sx={{ color: '#0E7490' }} />
+          </Box>
+        )}
+        {!isLoading && notifications.length === 0 && (
+          <Box sx={{ textAlign: 'center', py: 6, color: '#9CA3AF' }}>
+            <NotificationsNone sx={{ fontSize: 48, mb: 1, opacity: 0.4 }} />
+            <Typography variant="body2" fontWeight={500}>Sin notificaciones pendientes</Typography>
+          </Box>
+        )}
         <AnimatePresence>
-          {notificaciones.map((notif, index) => {
-            const cfg = tipoConfig[notif.tipo];
+          {notifications.map((notif, index) => {
+            const cfg = NOTIF_UI_CONFIG[notif.tipo] ?? NOTIF_UI_CONFIG['SEGUIMIENTO_PROXIMO'];
             return (
               <motion.div
                 key={notif.id}
@@ -263,7 +256,10 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                     />
                   )}
 
-                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                  <Box
+                    onClick={() => handleClickNotif(notif)}
+                    sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', cursor: 'pointer' }}
+                  >
                     {/* Icon avatar */}
                     <Avatar
                       sx={{
@@ -274,7 +270,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                         flexShrink: 0,
                       }}
                     >
-                      {React.cloneElement(cfg.icon as React.ReactElement, {
+                      {React.cloneElement(getNotifIcon(notif.tipo) as React.ReactElement, {
                         sx: { fontSize: 18 },
                       })}
                     </Avatar>
@@ -300,7 +296,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                             fontWeight: 700,
                           }}
                         >
-                          {notif.tipo}
+                          {cfg.label}
                         </Box>
                       </Box>
                       <Typography
@@ -325,7 +321,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                           mb: 0.8,
                         }}
                       >
-                        {notif.descripcion}
+                        {notif.mensaje ?? ''}
                       </Typography>
 
                       <Box
@@ -339,25 +335,23 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                           variant="caption"
                           sx={{ color: '#9CA3AF', fontSize: '0.7rem' }}
                         >
-                          {notif.timestamp}
+                          {formatTimestamp(notif.created_at)}
                         </Typography>
-                        {!notif.leida && (
-                          <Button
-                            size="small"
-                            sx={{
-                              fontSize: '0.68rem',
-                              textTransform: 'none',
-                              color: '#0E7490',
-                              py: 0,
-                              px: 1,
-                              minWidth: 'auto',
-                              '&:hover': { backgroundColor: '#E0F2FE' },
-                            }}
-                            onClick={() => marcarLeida(notif.id)}
-                          >
-                            Marcar leída
-                          </Button>
-                        )}
+                        <Button
+                          size="small"
+                          sx={{
+                            fontSize: '0.68rem',
+                            textTransform: 'none',
+                            color: '#0E7490',
+                            py: 0,
+                            px: 1,
+                            minWidth: 'auto',
+                            '&:hover': { backgroundColor: '#E0F2FE' },
+                          }}
+                          onClick={(e) => { e.stopPropagation(); handleMarcarLeida(notif); }}
+                        >
+                          Marcar leída
+                        </Button>
                       </Box>
                     </Box>
                   </Box>
@@ -394,7 +388,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
             color: '#374151',
             '&:hover': { borderColor: '#0E7490', color: '#0E7490' },
           }}
-          onClick={marcarTodasLeidas}
+          onClick={handleMarcarTodasLeidas}
           disabled={noLeidas === 0}
         >
           Marcar todas
@@ -411,8 +405,8 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
             '&:hover': { backgroundColor: '#0c6680' },
           }}
           onClick={() => {
-            toast('Módulo de notificaciones completo', { icon: '🔔' });
             onClose();
+            navigate('/notifications');
           }}
         >
           Ver todas

@@ -33,6 +33,7 @@ const EntregasPage = lazy(() => import('@modules/entregas/EntregasPage').then(m 
 const FollowupsPage = lazy(() => import('@modules/followups/pages/FollowupsPage'));
 const BarriersPage = lazy(() => import('@modules/barriers/pages/BarriersPage'));
 const TasksPage = lazy(() => import('@modules/tasks/pages/TasksPage'));
+const NotificationsPage = lazy(() => import('@modules/notifications/pages/NotificationsPage'));
 const ParaclinicosPage = lazy(() => import('@modules/diagnostics/pages/ParaclinicosPage'));
 const InventarioPage = lazy(() => import('@modules/inventario/pages/InventarioPage'));
 const TransportesPage = lazy(() => import('@modules/transportes/pages/TransportesPage'));
@@ -154,6 +155,16 @@ export const AppRoutes = () => {
             <Route
               path="/tasks"
               element={<Navigate to="/followups" replace />}
+            />
+
+            {/* Notificaciones */}
+            <Route
+              path="/notifications"
+              element={
+                <Suspense fallback={<LoadingFallback />}>
+                  <NotificationsPage />
+                </Suspense>
+              }
             />
 
             {/* Rutas de Paraclínicos */}

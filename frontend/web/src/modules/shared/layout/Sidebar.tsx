@@ -43,6 +43,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authStore } from '@/stores/auth.store';
 import { NotificationsDrawer } from '@modules/shared/components/NotificationsDrawer';
+import { useUnreadCount } from '@/hooks/useNotificaciones';
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 72;
@@ -65,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open: externalOpen }) => {
   const location = useLocation();
   const user = authStore((state) => state.user);
   const logout = authStore((state) => state.logout);
+  const { count: unreadCount } = useUnreadCount();
 
   // Conteos dinámicos para badges
   const { data: patientsCount } = useQuery({
@@ -383,7 +385,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open: externalOpen }) => {
                 color: '#6B7280',
               }}
             >
-              <Badge badgeContent={3} color="error">
+              <Badge badgeContent={unreadCount || 0} color="error" max={99} invisible={!unreadCount}>
                 <Notifications />
               </Badge>
             </ListItemIcon>

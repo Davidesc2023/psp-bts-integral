@@ -57,7 +57,8 @@ function buildAnonymizationPatch(docNumber: string | null | undefined): Record<s
 function sanitizePayload<T extends Record<string, unknown>>(payload: T): T {
   const result = {} as T;
   for (const key in payload) {
-    result[key] = payload[key] === '' ? null : payload[key];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (result as any)[key] = payload[key] === '' ? null : payload[key];
   }
   return result;
 }
