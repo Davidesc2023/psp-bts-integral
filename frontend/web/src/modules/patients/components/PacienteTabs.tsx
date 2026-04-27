@@ -30,8 +30,25 @@ import {
   DirectionsBus,
   Biotech,
   MedicalServices,
+  ReportProblem,
+  AddCircleOutline,
 } from '@mui/icons-material';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  FormControlLabel,
+  Checkbox,
+} from '@mui/material';
 import { supabase } from '@services/supabaseClient';
+import { ramService } from '@services/ramService';
+import type { Ram } from '@services/ramService';
 import { Patient } from '@/types';
 import { Patient360Panel } from './Patient360Panel';
 
@@ -74,6 +91,10 @@ export const PacienteTabs = ({ patient, onEdit }: PacienteTabsProps) => {
   const [transportes, setTransportes] = useState<any[]>([]);
   const [paraclinicos, setParaclinicos] = useState<any[]>([]);
   const [serviciosEspeciales, setServiciosEspeciales] = useState<any[]>([]);
+  const [rams, setRams] = useState<Ram[]>([]);
+  const [ramLoading, setRamLoading] = useState(false);
+  const [ramDialog, setRamDialog] = useState(false);
+  const [ramForm, setRamForm] = useState({ fechaRam: new Date().toISOString().slice(0, 10), descripcion: '', gravedad: 'LEVE' as Ram['gravedad'], observaciones: '', reportadoAInvima: false });
   const [loadingModules, setLoadingModules] = useState(false);
   const theme = useTheme();
 
@@ -106,6 +127,8 @@ export const PacienteTabs = ({ patient, onEdit }: PacienteTabsProps) => {
         if (results[8].status === 'fulfilled') setTransportes(results[8].value);
         if (results[9].status === 'fulfilled') setParaclinicos(results[9].value);
         if (results[10].status === 'fulfilled') setServiciosEspeciales(results[10].value);
+        // Load RAMs
+        ramService.listar(patient.id).then(setRams).catch(() => { /* silent */ });
       } catch {
         // silent — individual modules might fail
       } finally {
@@ -154,6 +177,7 @@ export const PacienteTabs = ({ patient, onEdit }: PacienteTabsProps) => {
         <Tab label={`Transportes (${transportes.length})`} icon={<DirectionsBus sx={{ fontSize: 18 }} />} iconPosition="start" />
         <Tab label={`Paraclínicos (${paraclinicos.length})`} icon={<Biotech sx={{ fontSize: 18 }} />} iconPosition="start" />
         <Tab label={`Servicios (${serviciosEspeciales.length})`} icon={<MedicalServices sx={{ fontSize: 18 }} />} iconPosition="start" />
+        <Tab label={`RAM (${rams.length})`} icon={<ReportProblem sx={{ fontSize: 18 }} />} iconPosition="start" />
       </Tabs>
 
       {/* Tab 0: Vista 360° */}
@@ -644,6 +668,82 @@ export const PacienteTabs = ({ patient, onEdit }: PacienteTabsProps) => {
             ))}
           </Grid>
         )}
+      </TabPanel>
+
+      {/* Tab 13: RAM */}
+      <TabPanel value={tab} index={13}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="subtitle1" fontWeight={700}>Reacciones Adversas a Medicamentos</Typography>
+          <Button variant="contained" size="small" startIcon={<AddCircleOutline />}
+            sx={{ backgroundColor: '#DC2626', '&:hover': { backgroundColor: '#b91c1c' }, textTransform: 'none', borderRadius: '8px' }}
+            onClick={() => setRamDialog(true)}>
+            Registrar RAM
+          </Button>
+        </Stack>
+        {rams.length === 0 ? (
+          <Alert severity="success">No hay reacciones adversas registradas para este paciente</Alert>
+        ) : (
+          <Stack spacing={2}>
+            {rams.map((r) => (
+              <Paper key={r.id} sx={{ p: 2, borderLeft: `4px solid ${ r.gravedad === 'MORTAL' ? '#7F1D1D' : r.gravedad === 'GRAVE' ? '#DC2626' : r.gravedad === 'MODERADA' ? '#D97706' : '#059669' }`, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                  <Typography variant="subtitle2" fontWeight={700}>{r.descripcion}</Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Chip label={r.gravedad} size="small" sx={{ backgroundColor: r.gravedad === 'MORTAL' ? '#FEE2E2' : r.gravedad === 'GRAVE' ? '#FEE2E2' : r.gravedad === 'MODERADA' ? '#FEF3C7' : '#D1FAE5', color: r.gravedad === 'MORTAL' ? '#7F1D1D' : r.gravedad === 'GRAVE' ? '#991B1B' : r.gravedad === 'MODERADA' ? '#92400E' : '#065F46', fontWeight: 700 }} />
+                    <Chip label={r.estado} size="small" variant="outlined" />
+                  </Stack>
+                </Stack>
+                {r.medicamentoNombre && <Typography variant="body2" color="text.secondary">Medicamento: {r.medicamentoNombre}</Typography>}
+                {r.observaciones && <Typography variant="body2" color="text.secondary">{r.observaciones}</Typography>}
+                <Typography variant="caption" color="text.secondary">
+                  {formatDate(r.fechaRam)}{r.reportadoAInvima ? ' · Reportado a INVIMA' : ''}
+                </Typography>
+              </Paper>
+            ))}
+          </Stack>
+        )}
+
+        {/* Dialog nuevo RAM */}
+        <Dialog open={ramDialog} onClose={() => setRamDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Registrar Reacción Adversa (RAM)</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField label="Fecha" type="date" size="small" fullWidth InputLabelProps={{ shrink: true }}
+                value={ramForm.fechaRam} onChange={(e) => setRamForm((f) => ({ ...f, fechaRam: e.target.value }))} />
+              <TextField label="Descripción de la reacción" size="small" fullWidth multiline rows={3}
+                value={ramForm.descripcion} onChange={(e) => setRamForm((f) => ({ ...f, descripcion: e.target.value }))} />
+              <FormControl size="small" fullWidth>
+                <InputLabel>Gravedad</InputLabel>
+                <Select value={ramForm.gravedad} label="Gravedad" onChange={(e) => setRamForm((f) => ({ ...f, gravedad: e.target.value as Ram['gravedad'] }))}>
+                  <MenuItem value="LEVE">Leve</MenuItem>
+                  <MenuItem value="MODERADA">Moderada</MenuItem>
+                  <MenuItem value="GRAVE">Grave</MenuItem>
+                  <MenuItem value="MORTAL">Mortal</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField label="Observaciones" size="small" fullWidth multiline rows={2}
+                value={ramForm.observaciones} onChange={(e) => setRamForm((f) => ({ ...f, observaciones: e.target.value }))} />
+              <FormControlLabel control={
+                <Checkbox checked={ramForm.reportadoAInvima} onChange={(e) => setRamForm((f) => ({ ...f, reportadoAInvima: e.target.checked }))} />
+              } label="Reportado a INVIMA" />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setRamDialog(false)} sx={{ textTransform: 'none' }}>Cancelar</Button>
+            <Button variant="contained" disabled={ramLoading || !ramForm.descripcion}
+              sx={{ backgroundColor: '#DC2626', '&:hover': { backgroundColor: '#b91c1c' }, textTransform: 'none' }}
+              onClick={async () => {
+                setRamLoading(true);
+                try {
+                  const created = await ramService.crear({ pacienteId: patient.id, fechaRam: ramForm.fechaRam, descripcion: ramForm.descripcion, gravedad: ramForm.gravedad, observaciones: ramForm.observaciones || undefined, reportadoAInvima: ramForm.reportadoAInvima });
+                  setRams((prev) => [created, ...prev]);
+                  setRamDialog(false);
+                  setRamForm({ fechaRam: new Date().toISOString().slice(0, 10), descripcion: '', gravedad: 'LEVE', observaciones: '', reportadoAInvima: false });
+                } catch { /* silent */ } finally { setRamLoading(false); }
+              }}
+            >{ramLoading ? 'Guardando...' : 'Guardar RAM'}</Button>
+          </DialogActions>
+        </Dialog>
       </TabPanel>
     </Box>
   );
