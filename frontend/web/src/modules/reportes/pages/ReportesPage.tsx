@@ -50,6 +50,7 @@ import { prescripcionService } from '@services/prescripcionService';
 import { transporteService } from '@services/transporteService';
 import { inventarioService } from '@modules/inventario/services/inventario.service';
 import { servicioComplementarioService } from '@services/servicioComplementarioService';
+import * as XLSX from 'xlsx';
 
 // ─── Download utilities ───────────────────────────────────────────────────────
 
@@ -73,17 +74,15 @@ const downloadCSV = (data: Record<string, unknown>[], filename: string) => {
 
 const downloadExcel = (data: Record<string, unknown>[], filename: string) => {
   if (!data.length) return;
-  const headers = Object.keys(data[0]).join('\t');
-  const rows = data.map((row) => Object.values(row).join('\t')).join('\n');
-  const content = `${headers}\n${rows}`;
-  const BOM = '\uFEFF';
-  const blob = new Blob([BOM + content], {
-    type: 'application/vnd.ms-excel;charset=utf-8;',
-  });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename + '.xls';
-  link.click();
+  const ws = XLSX.utils.json_to_sheet(data);
+  // Auto-width columns
+  const keys = Object.keys(data[0]);
+  ws['!cols'] = keys.map((key) => ({
+    wch: Math.max(key.length, ...data.map((row) => String(row[key] ?? '').length)) + 2,
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, filename.slice(0, 31));
+  XLSX.writeFile(wb, `${filename}.xlsx`);
 };
 
 // ─── Data fetcher per report type ───────────────────────────────────────────

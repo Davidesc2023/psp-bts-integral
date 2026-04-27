@@ -29,6 +29,17 @@ import { Patient, PatientStatus } from '@/types';
 import { PacienteFilters } from '../components/PacienteFilters';
 import { PacienteCard } from '../components/PacienteCard';
 import toast from 'react-hot-toast';
+import { ImportExcelButton, ImportColumn } from '@modules/shared/components/ImportExcelButton';
+
+const PACIENTES_IMPORT_SCHEMA: ImportColumn[] = [
+  { key: 'Nombres', label: 'Nombres', required: true, dbColumn: 'first_name' },
+  { key: 'Apellidos', label: 'Apellidos', required: true, dbColumn: 'last_name' },
+  { key: 'NumeroDocumento', label: 'Número de Documento', dbColumn: 'document_number' },
+  { key: 'Email', label: 'Email', dbColumn: 'email' },
+  { key: 'Telefono', label: 'Teléfono', dbColumn: 'phone' },
+  { key: 'FechaNacimiento', label: 'Fecha de Nacimiento (YYYY-MM-DD)', dbColumn: 'birth_date' },
+  { key: 'FechaIngreso', label: 'Fecha de Ingreso (YYYY-MM-DD)', dbColumn: 'fecha_ingreso' },
+];
 
 const statusLabels: Record<PatientStatus, string> = {
   EN_PROCESO:           'En Proceso',
@@ -222,19 +233,27 @@ const PacientesPage = () => {
             Gestión de pacientes del programa
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => navigate('/patients/new')}
-          sx={{
-            bgcolor: theme.palette.primary.main,
-            '&:hover': { bgcolor: theme.palette.primary.dark },
-            textTransform: 'none',
-            fontWeight: 600,
-          }}
-        >
-          + Crear Paciente
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <ImportExcelButton
+            entityLabel="Pacientes"
+            tableName="patients"
+            schema={PACIENTES_IMPORT_SCHEMA}
+            onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['patients'] })}
+          />
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => navigate('/patients/new')}
+            sx={{
+              bgcolor: theme.palette.primary.main,
+              '&:hover': { bgcolor: theme.palette.primary.dark },
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
+            + Crear Paciente
+          </Button>
+        </Box>
       </Box>
 
       {/* Filtros */}
